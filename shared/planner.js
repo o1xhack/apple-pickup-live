@@ -1,6 +1,7 @@
 export function chooseRegion({stores,candidates,coverage,seen,checked,backoff,snapshot,now,intervalMs,tried}){
  const available=stores.filter(s=>!backoff.stores.has(s.id)&&!checked.has(s.id));
- const due=available.filter(s=>!seen.has(s.id)||now-(snapshot.stores[s.id]?.cells[0]?.at||0)>=intervalMs);
+ const unvisited=available.filter(s=>!seen.has(s.id));
+ const due=unvisited.length?unvisited:available.filter(s=>now-(snapshot.stores[s.id]?.cells[0]?.at||0)>=intervalMs);
  if(!due.length)return null;
  const dueIds=new Set(due.map(s=>s.id));let best=null;
  for(const candidate of candidates){if(tried.has(candidate.zip)||backoff.zips.has(candidate.zip))continue;
