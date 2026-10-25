@@ -31,7 +31,7 @@ async function publish(){data.publishedAt=Date.now();persist();const events=db.p
 let budgetDay=new Date().setUTCHours(0,0,0,0),budgetUsed=db.prepare('SELECT count(*) n FROM requests WHERE at>=?').get(budgetDay).n;
 async function tick(){
  const began=Date.now();let attempts=0;const checked=new Set();let tried=new Set();
- if(data.health.cooldownUntil>began){data.health.message='Apple temporarily limited requests; collection is cooling down';await publish();return}
+ if(data.health.cooldownUntil>began){data.health.message='Collection is cooling down after request errors';await publish();return}
  // Each successful query learns its actual store coverage. Until learned, geometry is a proposal only.
  while(!stopping&&attempts<36&&Date.now()-began<50000){
   const dayStart=new Date().setUTCHours(0,0,0,0);
