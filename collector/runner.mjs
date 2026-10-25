@@ -1,3 +1,4 @@
+import {queueValidation,validateRound,nextCollectionDelay} from '../shared/deployment-validation.js';
 import {CollectionStorage} from './storage.mjs';
 import {requestJSON,publishWithRetry,validateRegionalResponse} from './transport.mjs';
 import {chooseRegion} from '../shared/planner.js';
@@ -30,8 +31,8 @@ const persist=()=>storage.save(data,coverage);
 async function publish(){data.publishedAt=Date.now();persist();const events=storage.pending();await publishWithRetry(()=>api('/api/ingest',{snapshot:data,events:events.map(e=>JSON.parse(e.payload))}));storage.acknowledge(events,data)}
 let budgetDay=new Date().setUTCHours(0,0,0,0),budgetUsed=db.prepare('SELECT count(*) n FROM requests WHERE at>=?').get(budgetDay).n;
 async function tick(){
- const began=Date.now();normalizeBudgetPeriod(data.health,INTERVAL_SECONDS);requestBudget(data.health,began);const schedule=collectionSchedule(data.health,INTERVAL_SECONDS);const maxRequests=schedule.budget;data.health.intervalSeconds=INTERVAL_SECONDS;data.health.spacingSeconds=Math.round(schedule.spacingMs/100)/10;data.health.nextAt=began+schedule.intervalMs;let attempts=0;const checked=new Set();let tried=new Set();let passSeen=new Set(data.health.coveragePassSeen||[]);
- if(data.health.cooldownUntil>began){data.health.message='Collection is cooling down after request errors';await publish();return}
+ const began=Date.now();queueValidation(data.health,'coverage-plan-v2',began);let validationErrors=0,firstResult=null;normalizeBudgetPeriod(data.health,INTERVAL_SECONDS);requestBudget(data.health,began);const schedule=collectionSchedule(data.health,INTERVAL_SECONDS);const maxRequests=schedule.budget;data.health.intervalSeconds=INTERVAL_SECONDS;data.health.spacingSeconds=Math.round(schedule.spacingMs/100)/10;data.health.nextAt=began+schedule.intervalMs;let attempts=0;const checked=new Set();let tried=new Set();let passSeen=new Set(data.health.coveragePassSeen||[]);
+ if(data.health.cooldownUntil>began){data.health.nextAt=Math.min(began+schedule.intervalMs,data.health.cooldownUntil);data.health.message='Collection is cooling down after request errors';await publish();return}
  // Each successful query learns its actual store coverage. Until learned, geometry is a proposal only.
  while(!stopping&&attempts<maxRequests&&Date.now()-began<schedule.intervalMs-1000){
   const dayStart=new Date().setUTCHours(0,0,0,0);
@@ -52,6 +53,7 @@ async function tick(){
   if(!next)break;tried.add(next.zip);attempts++;budgetUsed++;
   const requestId=crypto.randomUUID(),at=Date.now();let result;
   try{result=validateRegionalResponse(await api('/api/collector/check',{zip:next.zip}),products.length)}catch(e){result={status:0,stores:[],error:e.message,serviceStatus:e.status||0}}
+  firstResult||={at,httpStatus:result.status,stores:result.stores?.length||0,error:result.error||null};if(result.error||result.status!==200)validationErrors++;
   const events=applyObservation(data,{requestId,at,stores:result.stores||[],httpStatus:result.status,error:result.error,source:'cloudflare'});
   if(!result.error&&result.status===200){coverage[next.zip]=result.stores.map(s=>s.id);for(const item of result.stores){checked.add(item.id);passSeen.add(item.id)}}
   const decision=recordResult(data.health,{zip:next.zip,status:result.status,error:result.error,stores:next.learning?[]:[...new Set([next.targetStore,...next.ids])],retryAfterSeconds:result.retryAfterSeconds||0},at);
@@ -65,10 +67,11 @@ async function tick(){
   if(Date.now()-data.publishedAt>=60000)await publish();
   let spacing=Math.max(0,schedule.spacingMs-(Date.now()-at));while(spacing>0&&!stopping){await sleep(Math.min(spacing,1000));spacing-=1000}
  }
+ validateRound(data.health,{attempts,covered:checked.size,errors:validationErrors,firstResult});
  data.health.lastSweepStores=checked.size;if(checked.size===stores.length){data.health.healthySweeps=(data.health.healthySweeps||0)+1;if(data.health.healthySweeps>=3)data.health.blockLevel=0}else data.health.healthySweeps=0;
  await publish();db.prepare('DELETE FROM requests WHERE at<?').run(Date.now()-30*86400000);db.prepare("DELETE FROM checkpoints WHERE ts<? AND strftime('%M',ts/1000,'unixepoch')!='00'").run(Date.now()-14*86400000);console.log(JSON.stringify({at:new Date().toISOString(),attempts,covered:checked.size,errors:data.totals.errors,cooldownUntil:data.health.cooldownUntil||0}));
 }
 try{
  if(!data){const info=await api('/api/info');data=emptySnapshot(stores,products,info.startedAt);persist()}
- while(!stopping){const start=Date.now();try{await tick()}catch(e){console.error(new Date().toISOString(),e.message)}if(process.argv.includes('--once'))break;let delay=Math.max(1000,INTERVAL_SECONDS*1000-(Date.now()-start));while(delay>0&&!stopping){await sleep(Math.min(delay,1000));delay-=1000}}
+ while(!stopping){const start=Date.now();try{await tick()}catch(e){console.error(new Date().toISOString(),e.message)}if(process.argv.includes('--once'))break;let delay=nextCollectionDelay(data.health,INTERVAL_SECONDS*1000,Date.now()-start);while(delay>0&&!stopping){await sleep(Math.min(delay,1000));delay-=1000}}
 }finally{persist();storage.close()}
