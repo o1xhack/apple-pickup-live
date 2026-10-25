@@ -1,6 +1,7 @@
 import {CollectionStorage} from './storage.mjs';
 import {requestJSON,publishWithRetry,validateRegionalResponse} from './transport.mjs';
 import {chooseRegion} from '../shared/planner.js';
+import {compactVerifiedCoverage,learningProposal} from '../shared/coverage-plan.js';
 import {readFileSync,mkdirSync,writeFileSync,openSync,closeSync,unlinkSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
@@ -13,6 +14,7 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const config=Object.fromEntries(readFileSync(resolve(root,'.env.local'),'utf8').split('\n').filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i),l.slice(i+1)]}));
 const stores=JSON.parse(readFileSync(resolve(root,'data/us-stores.json'))),products=JSON.parse(readFileSync(resolve(root,'data/products.json')));
 const hubs=JSON.parse(readFileSync(resolve(root,'data/polling-hubs.json'))).hubs;
+const proposals=JSON.parse(readFileSync(resolve(root,'data/learning-hubs.json'))).hubs;
 const INTERVAL_SECONDS=Number(config.COLLECTION_INTERVAL_SECONDS)||300;
 const stateDir=resolve(root,'state.local');mkdirSync(stateDir,{recursive:true});
 // A single launchd process owns this database. O_EXCL prevents accidental duplicate collectors.
@@ -37,13 +39,22 @@ async function tick(){
   if(budgetUsed>=52000){data.health.message='Daily collection request budget reached';data.health.cooldownUntil=dayStart+86400000;break}
   const backoff=regionBackoff(data.health);
   const candidates=[...hubs.map(h=>({zip:h.zip,ids:h.expectedStoreIds})),...stores.map(s=>({zip:s.zip,ids:[s.id]}))];
-  const next=chooseRegion({stores,candidates,coverage,seen:passSeen,checked,backoff,snapshot:data,now:Date.now(),intervalMs:schedule.intervalMs,tried});
+  const verified=compactVerifiedCoverage(coverage);
+  const args={stores,coverage,seen:passSeen,checked,backoff,snapshot:data,now:Date.now(),intervalMs:schedule.intervalMs,tried};
+  const eligible=new Set(stores.filter(s=>!checked.has(s.id)&&!passSeen.has(s.id)).map(s=>s.id));
+  // At most one replacement query per round learns a better hub. It consumes
+  // the existing adaptive budget; predictions never certify any store.
+  const learning=attempts===0?learningProposal({proposals,coverage,attempted:data.health.learningAttempted||{},backoff,eligible}):null;
+  const next=learning||chooseRegion({...args,candidates:verified})||chooseRegion({...args,candidates});
+  data.health.verifiedRegionCount=verified.length;
+  data.health.estimatedCoverageSeconds=Math.ceil(verified.length/maxRequests)*INTERVAL_SECONDS;
+  if(learning){data.health.learningAttempted||={};data.health.learningAttempted[next.zip]=Date.now()}
   if(!next)break;tried.add(next.zip);attempts++;budgetUsed++;
   const requestId=crypto.randomUUID(),at=Date.now();let result;
   try{result=validateRegionalResponse(await api('/api/collector/check',{zip:next.zip}),products.length)}catch(e){result={status:0,stores:[],error:e.message,serviceStatus:e.status||0}}
   const events=applyObservation(data,{requestId,at,stores:result.stores||[],httpStatus:result.status,error:result.error,source:'cloudflare'});
   if(!result.error&&result.status===200){coverage[next.zip]=result.stores.map(s=>s.id);for(const item of result.stores){checked.add(item.id);passSeen.add(item.id)}}
-  const decision=recordResult(data.health,{zip:next.zip,status:result.status,error:result.error,stores:[...new Set([next.targetStore,...next.ids])],retryAfterSeconds:result.retryAfterSeconds||0},at);
+  const decision=recordResult(data.health,{zip:next.zip,status:result.status,error:result.error,stores:next.learning?[]:[...new Set([next.targetStore,...next.ids])],retryAfterSeconds:result.retryAfterSeconds||0},at);
   data.health.mode='cloudflare';data.health.nextAt=began+schedule.intervalMs;
   const blocked=decision.global;if(blocked){data.health.healthySweeps=0;reduceBudget(data.health)}
   if(passSeen.size===stores.length){data.totals.sweeps++;data.health.lastNationwideCoverageAt=at;passSeen=new Set()}

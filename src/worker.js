@@ -1,6 +1,10 @@
 import stores from '../data/us-stores.json';
 import products from '../data/products.json';
+import legacyProducts from '../data/legacy-products.json';
+import {legacyMetadata,legacyStatistics} from './legacy.js';
+const historyProducts=[...products,...legacyProducts.filter(p=>!products.some(x=>x.part===p.part))];
 import hubsData from '../data/polling-hubs.json';
+import learningHubs from '../data/learning-hubs.json';
 import {emptySnapshot,parseApple,applyObservation,viewCell} from '../shared/model.js';
 import {parseRetryAfter} from '../shared/throttle.js';
 const json=(body,status=200,extra={})=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store',...extra}});
@@ -28,7 +32,8 @@ export default {
   const url=new URL(request.url);try{
    if(!url.pathname.startsWith('/api/'))return env.ASSETS.fetch(request);
    let response;
-   if(url.pathname==='/api/info')response=json({startedAt:await siteStart(env),stores:stores.length,products,version:'0.1.0',freshSeconds:300,source:'Apple pickup observations',coordinateAccuracy:'ZIP estimates, approximate straight-line distance'});
+   if(url.pathname==='/api/info')response=json({startedAt:await siteStart(env),stores:stores.length,products,version:'0.1.0',legacy:await legacyMetadata(env),freshSeconds:300,source:'Apple pickup observations',coordinateAccuracy:'ZIP estimates, approximate straight-line distance'});
+   else if(url.pathname==='/api/legacy/statistics'){try{response=json(await legacyStatistics(env,url,stores,historyProducts))}catch(error){response=json({error:error.message},400)}}
    else if(url.pathname==='/api/latest'||url.pathname==='/api/checkpoint'){
     const at=Number(url.searchParams.get('at')||Date.now());if(!Number.isFinite(at))return json({error:'Invalid time'},400);
     const row=await latest(env,Math.min(at,Date.now()));
@@ -40,12 +45,13 @@ export default {
     const rows=await env.DB.prepare('SELECT max(ts) AS ts,checks,positives,requests,errors,fresh_stores FROM checkpoints WHERE ts>=? AND ts<=? GROUP BY CAST(ts/? AS INTEGER) ORDER BY ts').bind(from,to,bucket).all();response=json({points:rows.results});
    }else if(url.pathname==='/api/history'){
     const store=url.searchParams.get('store')||'',part=url.searchParams.get('part')||'';
-    if(store&&!stores.some(s=>s.id===store)||part&&!products.some(p=>p.part===part))return json({error:'Unknown store or configuration'},400);
+    if(store&&!stores.some(s=>s.id===store)||part&&!historyProducts.some(p=>p.part===part))return json({error:'Unknown store or configuration'},400);
     const ids=(url.searchParams.get('stores')||'').split(',').filter(Boolean),parts=(url.searchParams.get('parts')||'').split(',').filter(Boolean);
-    if(ids.length>269||ids.some(id=>!stores.some(s=>s.id===id))||parts.some(id=>!products.some(p=>p.part===id)))return json({error:'Invalid filters'},400);
+    if(ids.length>269||ids.some(id=>!stores.some(s=>s.id===id))||parts.some(id=>!historyProducts.some(p=>p.part===id)))return json({error:'Invalid filters'},400);
     const from=Math.max(0,Number(url.searchParams.get('from')||Date.now()-7*86400000)),to=Math.min(Date.now(),Number(url.searchParams.get('to')||Date.now()));
     if(!Number.isFinite(from+to)||to<from)return json({error:'Invalid dates'},400);
-    const result=await env.DB.prepare('SELECT ts,store,part,state,kind FROM stock_events WHERE ts>=? AND ts<=? AND (?=\'\' OR store=?) AND (?=\'\' OR part=?) AND (?=0 OR store IN(SELECT value FROM json_each(?))) AND (?=0 OR part IN(SELECT value FROM json_each(?))) ORDER BY ts DESC LIMIT 200').bind(from,to,store,store,part,part,ids.length,JSON.stringify(ids),parts.length,JSON.stringify(parts)).all();response=json({events:result.results});
+    const source=url.searchParams.get('source')||'all';if(!['all','national','legacy_ca'].includes(source))return json({error:'Invalid source'},400);
+    const result=await env.DB.prepare('SELECT ts,store,part,state,kind,source FROM stock_events WHERE ts>=? AND ts<=? AND (?=\'\' OR store=?) AND (?=\'\' OR part=?) AND (?=0 OR store IN(SELECT value FROM json_each(?))) AND (?=0 OR part IN(SELECT value FROM json_each(?))) AND (?=\'all\' OR source=?) ORDER BY ts DESC LIMIT 200').bind(from,to,store,store,part,part,ids.length,JSON.stringify(ids),parts.length,JSON.stringify(parts),source,source).all();response=json({events:result.results});
    }else if(url.pathname==='/api/ingest'&&request.method==='POST'){
     if(!safeEqual(request.headers.get('authorization'),`Bearer ${env.INGEST_TOKEN||''}`)||!env.INGEST_TOKEN)return json({error:'Unauthorized'},401);
     if(Number(request.headers.get('content-length')||0)>2_000_000)return json({error:'Payload too large'},413);
@@ -55,7 +61,7 @@ export default {
    }else if(url.pathname==='/api/collector/check'&&request.method==='POST'){
     if(!env.INGEST_TOKEN||!safeEqual(request.headers.get('authorization'),`Bearer ${env.INGEST_TOKEN}`))return json({error:'Unauthorized'},401);
     const input=await request.json();
-    if(!stores.some(s=>s.zip===input.zip)&&!hubsData.hubs.some(h=>h.zip===input.zip))return json({error:'Unknown collection region'},400);
+    if(!stores.some(s=>s.zip===input.zip)&&!hubsData.hubs.some(h=>h.zip===input.zip)&&!learningHubs.hubs.some(h=>h.zip===input.zip))return json({error:'Unknown collection region'},400);
     const start=Date.now();const apple=await fetch(appleUrl(input.zip),{headers:appleHeaders(),signal:AbortSignal.timeout(20000)});let found=[];let error=null;
     if(apple.ok){try{found=parseApple(await apple.json(),products)}catch(e){error=e.message}}else{await apple.body?.cancel();error=`Apple HTTP ${apple.status}`}
     response=json({status:apple.status,stores:found.filter(x=>stores.some(s=>s.id===x.id)),at:start,durationMs:Date.now()-start,error,retryAfterSeconds:parseRetryAfter(apple.headers.get('retry-after'))});
