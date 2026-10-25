@@ -1,0 +1,17 @@
+Apple Pickup Live
+Copyright (c) 2026 o1xhack and contributors.
+Independent nationwide cached-inventory website; GPL-3.0-or-later.
+
+Store/product catalogs and pickup API behavior derive from:
+https://github.com/o1xhack/apple-pickup-watcher
+https://github.com/suversal/apple-store-inventory-monitor
+See data/NOTICE-upstream.txt and data/LICENSE-upstream.txt for retained notices.
+This project adds an independent website, Cloudflare transport and database,
+ZIP search, snapshot statistics and a separate collector. It does not ship the
+original desktop application or access its private settings.
+
+GeoNames ZIP dataset: CC BY 4.0, https://www.geonames.org/
+US Atlas topology: ISC; U.S. Census geographic boundaries.
+D3 and topojson-client: ISC. See docs/data-sources.md and dependency licenses.
+Apple and iPhone are trademarks of Apple Inc. This site is not affiliated
+with or endorsed by Apple. Availability is an observation, not a reservation.
