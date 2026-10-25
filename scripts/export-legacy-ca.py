@@ -5,7 +5,7 @@ import argparse,bisect,collections,hashlib,json,pathlib,re,sqlite3,subprocess,pl
 def export(source,root,before):
  stores={s['id']:s for s in json.loads((root/'data/us-stores.json').read_text()) if s['stateCode']=='CA'}
  c=sqlite3.connect('file:'+str(source)+'?mode=ro',uri=True);c.row_factory=sqlite3.Row;c.execute('BEGIN')
- sql='''SELECT o.*,t.store_number,t.part_number,t.product_name,c.session_id,c.next_check_in_secs FROM observations o JOIN targets t ON t.target_key=o.target_key JOIN cycles c ON c.id=o.cycle_id WHERE t.locale='en_US' AND o.checked_at_ms IS NOT NULL AND o.checked_at_ms<? ORDER BY o.checked_at_ms,o.cycle_id'''
+ sql='''SELECT o.*,t.store_number,t.part_number,t.product_name,c.session_id,c.next_check_in_secs FROM observations o JOIN targets t ON t.target_key=o.target_key JOIN cycles c ON c.id=o.cycle_id WHERE t.locale='en_US' AND t.product_name LIKE 'iPhone Duo %' AND o.checked_at_ms IS NOT NULL AND o.checked_at_ms<? ORDER BY o.checked_at_ms,o.cycle_id'''
  pauses=collections.defaultdict(list)
  for row in c.execute("SELECT session_id,occurred_at_ms FROM events WHERE kind IN ('started','paused') ORDER BY occurred_at_ms"):pauses[row[0]].append(row[1])
  buckets={};products={};events=[];last={};seen=set();cycles=set();first=None;end=None;quote_count=0

@@ -1,0 +1,2 @@
+export function appleUrl(zip,products){const url=new URL('https://www.apple.com/shop/retail/pickup-message');url.searchParams.set('pl','true');url.searchParams.set('mts.0','regular');url.searchParams.set('location',zip);products.forEach((p,i)=>url.searchParams.set(`parts.${i}`,p.part));return url.toString()}
+export function appleHeaders(){return {'accept':'application/json','referer':'https://www.apple.com/shop/buy-iphone/iphone-duo','user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36'}}

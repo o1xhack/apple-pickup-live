@@ -1,4 +1,5 @@
 import {queueValidation,validateRound,nextCollectionDelay} from '../shared/deployment-validation.js';
+import {collectLocal} from './apple.mjs';
 import {CollectionStorage} from './storage.mjs';
 import {requestJSON,publishWithRetry,validateRegionalResponse} from './transport.mjs';
 import {chooseRegion} from '../shared/planner.js';
@@ -31,7 +32,7 @@ const persist=()=>storage.save(data,coverage);
 async function publish(){data.publishedAt=Date.now();persist();const events=storage.pending();await publishWithRetry(()=>api('/api/ingest',{snapshot:data,events:events.map(e=>JSON.parse(e.payload))}));storage.acknowledge(events,data)}
 let budgetDay=new Date().setUTCHours(0,0,0,0),budgetUsed=db.prepare('SELECT count(*) n FROM requests WHERE at>=?').get(budgetDay).n;
 async function tick(){
- const began=Date.now();queueValidation(data.health,'coverage-plan-v2',began);let validationErrors=0,firstResult=null;normalizeBudgetPeriod(data.health,INTERVAL_SECONDS);requestBudget(data.health,began);const schedule=collectionSchedule(data.health,INTERVAL_SECONDS);const maxRequests=schedule.budget;data.health.intervalSeconds=INTERVAL_SECONDS;data.health.spacingSeconds=Math.round(schedule.spacingMs/100)/10;data.health.nextAt=began+schedule.intervalMs;let attempts=0;const checked=new Set();let tried=new Set();let passSeen=new Set(data.health.coveragePassSeen||[]);
+ const began=Date.now();queueValidation(data.health,'mac-local-v1',began);let validationErrors=0,firstResult=null;normalizeBudgetPeriod(data.health,INTERVAL_SECONDS);requestBudget(data.health,began);const schedule=collectionSchedule(data.health,INTERVAL_SECONDS);const maxRequests=schedule.budget;data.health.intervalSeconds=INTERVAL_SECONDS;data.health.spacingSeconds=Math.round(schedule.spacingMs/100)/10;data.health.nextAt=began+schedule.intervalMs;let attempts=0;const checked=new Set();let tried=new Set();let passSeen=new Set(data.health.coveragePassSeen||[]);
  if(data.health.cooldownUntil>began){data.health.nextAt=Math.min(began+schedule.intervalMs,data.health.cooldownUntil);data.health.message='Collection is cooling down after request errors';await publish();return}
  // Each successful query learns its actual store coverage. Until learned, geometry is a proposal only.
  while(!stopping&&attempts<maxRequests&&Date.now()-began<schedule.intervalMs-1000){
@@ -52,19 +53,19 @@ async function tick(){
   if(learning){data.health.learningAttempted||={};data.health.learningAttempted[next.zip]=Date.now()}
   if(!next)break;tried.add(next.zip);attempts++;budgetUsed++;
   const requestId=crypto.randomUUID(),at=Date.now();let result;
-  try{result=validateRegionalResponse(await api('/api/collector/check',{zip:next.zip}),products.length)}catch(e){result={status:0,stores:[],error:e.message,serviceStatus:e.status||0}}
+  try{result=validateRegionalResponse(await collectLocal(next.zip,products,stores),products.length)}catch(e){result={status:0,stores:[],error:e.message,serviceStatus:e.status||0}}
   firstResult||={at,httpStatus:result.status,stores:result.stores?.length||0,error:result.error||null};if(result.error||result.status!==200)validationErrors++;
-  const events=applyObservation(data,{requestId,at,stores:result.stores||[],httpStatus:result.status,error:result.error,source:'cloudflare'});
+  const events=applyObservation(data,{requestId,at,stores:result.stores||[],httpStatus:result.status,error:result.error,source:'mac-local'});
   if(!result.error&&result.status===200){coverage[next.zip]=result.stores.map(s=>s.id);for(const item of result.stores){checked.add(item.id);passSeen.add(item.id)}}
   const decision=recordResult(data.health,{zip:next.zip,status:result.status,error:result.error,stores:next.learning?[]:[...new Set([next.targetStore,...next.ids])],retryAfterSeconds:result.retryAfterSeconds||0},at);
-  data.health.mode='cloudflare';data.health.nextAt=began+schedule.intervalMs;
+  data.health.mode='mac-local';data.health.nextAt=began+schedule.intervalMs;
   const blocked=decision.global;if(blocked){data.health.healthySweeps=0;reduceBudget(data.health)}
   if(passSeen.size===stores.length){data.totals.sweeps++;data.health.lastNationwideCoverageAt=at;passSeen=new Set()}
   data.health.coveragePassSeen=[...passSeen];data.health.regionsResting=regionBackoff(data.health).zips.size;
   try{storage.record(data,coverage,{id:requestId,at,zip:next.zip,status:result.status,duration:result.durationMs||0,stores:result.stores?.length||0,error:result.error},events)}catch(error){const committed=storage.load();data=committed.snapshot;for(const key of Object.keys(coverage))delete coverage[key];Object.assign(coverage,committed.coverage);throw error}
   if(blocked)break;
   // Save a heartbeat before spacing out the next request, without bursting at round start.
-  if(Date.now()-data.publishedAt>=60000)await publish();
+  try{await publish()}catch(error){console.error(new Date().toISOString(),error.message)}
   let spacing=Math.max(0,schedule.spacingMs-(Date.now()-at));while(spacing>0&&!stopping){await sleep(Math.min(spacing,1000));spacing-=1000}
  }
  validateRound(data.health,{attempts,covered:checked.size,errors:validationErrors,firstResult});

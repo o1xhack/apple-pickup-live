@@ -15,13 +15,13 @@ Fallback: https://apple-pickup-live.o1xhack.workers.dev
 ## Architecture
 
 A separate Node collector on a Mac runs one collection round every 300 seconds, with requests spread across the round.
-It asks an authenticated Cloudflare endpoint for fixed-catalog regional Apple
-pickup results. Apple sees Cloudflare egress, not the desktop app's Mac egress.
+It requests Apple directly from the Mac for fixed-catalog regional pickup results.
+Cloudflare receives published results and serves the public read APIs; it does not scan Apple.
 The collector learns actual store coverage, prioritizes old/missing stores,
 limits each round to up to 36 requests over 300 seconds, and persists state in its own SQLite
 database. A complete nationwide sweep is **not** guaranteed every five minutes during adaptive throttling or cooldown.
 
-Once per round it publishes a compressed cumulative checkpoint plus state changes
+After each persisted regional response it immediately publishes a compressed cumulative checkpoint plus state changes
 to Cloudflare D1. The public website only reads this database. Browser feed refresh
 is every 15 seconds while visible; it does not poll Apple. The Mac must be awake,
 online, and logged in for its LaunchAgent to collect. The site still serves saved
@@ -35,8 +35,8 @@ challenge bypass, guarantee against Apple blocking, or automatic paid-plan upgra
 
 Cloudflare free-tier limits still apply: Workers request/CPU limits, D1 storage and
 row budgets can stop service as traffic grows. Collection alone can use roughly
-53,300 Worker invocations/day at its maximum budget (checks plus uploads), leaving
-limited room for public API traffic under the free 100,000/day quota. Static assets
+10,368 publication invocations/day at its maximum 36-request round budget,
+plus heartbeats, publication retries and public API traffic under the free 100,000/day quota. Static assets
 are separate. Monitor actual usage before advertising large-scale service.
 
 ## Local setup / deployment
@@ -87,7 +87,10 @@ and are approximate straight-line miles, not driving distances. See
 - **Restock candidate:** adjacent valid out-of-stock → in-stock observations.
 - **Unknown / unscanned / pickup not open / stale:** kept distinct from confirmed out of stock.
 - Fresh means checked within five minutes. Failures do not overwrite the last success.
-- History lists availability changes; Statistics includes unchanged repeated checks.
+- History lists availability changes and can filter in-stock results before pagination; Statistics includes unchanged repeated checks.
+- The homepage has eight scoped metrics. Fresh counts use a five-minute window; cumulative counts start at the public site launch. Every repeated in-stock store × SKU result increments the hit count.
+- The public product scope is iPhone Duo only. Earlier CA Duo history is combined automatically in History/Statistics, without source/model controls; it is excluded from homepage since-launch counters.
+- Raw HTTP/collector errors remain in operational logs, not public banners. Per-store age/stale labels remain visible.
 - Date comparisons use saved cumulative checkpoints, not exact sub-minute boundaries.
 - Remote/local checkpoints retain minute detail for 14 days, then hourly checkpoints.
   Changes are retained; local diagnostic requests retain 30 days.

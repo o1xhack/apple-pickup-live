@@ -15,8 +15,7 @@
 
 Read `/api/latest` and inspect `publishedAt`, `health.cooldownUntil`,
 `health.requestBudget`, `health.lastSuccess`, and individual cell `at` fields.
-`/api/info`, `/api/series` and `/api/history` only read D1. Do not use the private
-collector endpoint as a health check: it really requests Apple.
+`/api/info`, `/api/series` and `/api/history` only read D1. The former private Cloudflare collection endpoint now returns 410 after authentication; only the local collector requests Apple.
 
 On the collector Mac, use `launchctl print` for label
 `com.o1xhack.apple-pickup-live.collector` and inspect `state.local/service.log`,
@@ -46,3 +45,7 @@ in both Wrangler and `.env.local` if exposed; restart only this collector.
 The service currently needs an awake, logged-in Mac. LaunchAgent startup does not
 keep a sleeping Mac awake and does not run before user login. It never changes
 power settings, Tailscale, or the user's desktop app.
+
+## Mac transport cutover (2026-10-25)
+
+At 21:09:38 UTC the public collector switched to direct Mac requests, preserving its budget, cooldown, SQLite counters and existing observations. Each committed response is pushed immediately to D1; visible browsers read new snapshots every 15 seconds. The separate desktop App was paused by explicit user request; its 96 saved targets and notification settings remain. It must stay paused until the user asks otherwise. Initial Mac responses succeeded, but do not infer long-term reliability from a small sample. Cloudflare does not select or rotate outbound Apple IPs in the current architecture.

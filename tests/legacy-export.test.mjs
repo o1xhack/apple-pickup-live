@@ -10,7 +10,7 @@ with tempfile.TemporaryDirectory() as tmp:
  for key,locale in [('us','en_US'),('cn','zh_CN')]:db.execute('INSERT INTO targets VALUES(?,?,?,?,?)',(key,locale,ca,'MK1E4LL/A','iPhone Duo 256GB Star White'))
  for i,(at,key,state) in enumerate([(1000,'us','out_of_stock'),(61000,'us','in_stock'),(121000,'us','in_stock'),(500,'cn','in_stock'),(200000,'us','in_stock')]):
   db.execute('INSERT INTO cycles VALUES(?,?,?)',(i,1,60));db.execute('INSERT INTO observations VALUES(?,?,?,?,?,?)',(i,key,at,state,None,'private message must not be exported'))
- db.commit();db.close();b,e,meta=m.export(path,root,150000);sql=m.make_sql(b,e,meta)
+ db.execute('INSERT INTO targets VALUES(?,?,?,?,?)',('other','en_US',ca,'OLD','iPhone 18 Pro Max 1TB Burgundy'));db.execute('INSERT INTO observations VALUES(?,?,?,?,?,?)',(1,'other',61000,'in_stock',None,'private'));db.commit();db.close();b,e,meta=m.export(path,root,150000);sql=m.make_sql(b,e,meta)
  assert meta['checks']==3 and meta['hits']==2 and len(e)==1 and e[0]['kind']=='candidate_restock'
  assert 'private message' not in sql
  out=sqlite3.connect(':memory:');out.executescript((root/'migrations/0001_init.sql').read_text());out.executescript((root/'migrations/0002_legacy_ca.sql').read_text());out.executescript(sql);out.executescript(sql)
