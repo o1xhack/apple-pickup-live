@@ -18,8 +18,10 @@ A separate Node collector on a Mac runs one collection round every 300 seconds, 
 It requests Apple directly from the Mac for fixed-catalog regional pickup results.
 Cloudflare receives published results and serves the public read APIs; it does not scan Apple.
 The collector learns actual store coverage, prioritizes old/missing stores,
-limits each round to up to 36 requests over 300 seconds, and persists state in its own SQLite
-database. A complete nationwide sweep is **not** guaranteed every five minutes during adaptive throttling or cooldown.
+uses a fixed tour of successfully observed regional coverage to target all 269 stores
+inside 300 seconds, with at most 36 serial requests and 20 seconds of timing reserve.
+It persists actual per-round coverage and missing stores in its own SQLite state.
+A complete nationwide sweep is **not** guaranteed during adaptive throttling, request failure or cooldown.
 
 After each persisted regional response it immediately publishes a compressed cumulative checkpoint plus state changes
 to Cloudflare D1. The public website only reads this database. Browser feed refresh
