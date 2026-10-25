@@ -46,11 +46,13 @@ async function tick(){
   const requestId=crypto.randomUUID(),at=Date.now();let result;
   try{result=await api('/api/collector/check',{zip:next.zip})}catch(e){result={status:0,stores:[],error:e.message}}
   const events=applyObservation(data,{requestId,at,stores:result.stores||[],httpStatus:result.status,error:result.error,source:'cloudflare'});
-  db.exec('BEGIN');try{db.prepare('INSERT INTO requests VALUES(?,?,?,?,?,?,?)').run(requestId,at,next.zip,result.status,result.durationMs||0,result.stores?.length||0,result.error||null);for(const e of events)db.prepare('INSERT OR IGNORE INTO events(id,ts,payload) VALUES(?,?,?)').run(e.id,e.at,JSON.stringify(e));db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}
   if(!result.error&&result.status===200){coverage[next.zip]=result.stores.map(s=>s.id);for(const s of result.stores)checked.add(s.id);data.health.consecutiveErrors=0;data.health.message='Collecting nationwide observations'}else{data.health.consecutiveErrors=(data.health.consecutiveErrors||0)+1;data.health.message=result.error||'Collection request failed'}
   data.health.mode='cloudflare';data.health.nextAt=began+60000;data.health.lastSuccess=result.status===200&&!result.error?at:data.health.lastSuccess;
-  if([403,429,541].includes(result.status)||data.health.consecutiveErrors>=3){data.health.healthySweeps=0;reduceBudget(data.health);const level=Math.min(4,(data.health.blockLevel||0)+1);data.health.blockLevel=level;data.health.cooldownUntil=Date.now()+[300000,600000,1200000,1800000][level-1];persist();break}
-  persist();await sleep(Math.max(0,1000-(Date.now()-at)));
+  const blocked=[403,429,541].includes(result.status)||data.health.consecutiveErrors>=3;
+  if(blocked){data.health.healthySweeps=0;reduceBudget(data.health);const level=Math.min(4,(data.health.blockLevel||0)+1);data.health.blockLevel=level;data.health.cooldownUntil=Date.now()+[300000,600000,1200000,1800000][level-1];}
+  db.exec('BEGIN');try{db.prepare('INSERT INTO requests VALUES(?,?,?,?,?,?,?)').run(requestId,at,next.zip,result.status,result.durationMs||0,result.stores?.length||0,result.error||null);for(const e of events)db.prepare('INSERT OR IGNORE INTO events(id,ts,payload) VALUES(?,?,?)').run(e.id,e.at,JSON.stringify(e));persist();db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}
+  if(blocked)break;
+  await sleep(Math.max(0,1000-(Date.now()-at)));
  }
  data.health.lastSweepStores=checked.size;if(checked.size===stores.length){data.totals.sweeps++;data.health.healthySweeps=(data.health.healthySweeps||0)+1;if(data.health.healthySweeps>=3)data.health.blockLevel=0}else data.health.healthySweeps=0;
  await publish();db.prepare('DELETE FROM requests WHERE at<?').run(Date.now()-30*86400000);db.prepare("DELETE FROM checkpoints WHERE ts<? AND strftime('%M',ts/1000,'unixepoch')!='00'").run(Date.now()-14*86400000);console.log(JSON.stringify({at:new Date().toISOString(),attempts,covered:checked.size,errors:data.totals.errors,cooldownUntil:data.health.cooldownUntil||0}));
