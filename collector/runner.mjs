@@ -5,7 +5,7 @@ import {collectLocal} from './apple.mjs';
 import {CollectionStorage} from './storage.mjs';
 import {requestJSON,publishWithRetry,validateRegionalResponse} from './transport.mjs';
 import {chooseRegion} from '../shared/planner.js';
-import {compactVerifiedCoverage,learningProposal} from '../shared/coverage-plan.js';
+import {compactVerifiedCoverage,learningProposal,migrateLearningAttempts} from '../shared/coverage-plan.js';
 import {readFileSync,mkdirSync,writeFileSync,openSync,closeSync,unlinkSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
@@ -50,14 +50,14 @@ async function tick(){
   const eligible=new Set(stores.filter(s=>!checked.has(s.id)&&!passSeen.has(s.id)).map(s=>s.id));
   // At most one replacement query per round learns a better hub. It consumes
   // the existing adaptive budget; predictions never certify any store.
-  const learning=(!cyclePlan.complete||maxRequests<cyclePlan.regions.length)&&attempts===0?learningProposal({proposals,coverage,attempted:data.health.learningAttempted||{},backoff,eligible}):null;
+  const learning=(!cyclePlan.complete||maxRequests<cyclePlan.regions.length)&&attempts===0?learningProposal({proposals,coverage,attempted:data.health.learningAttempted||{},backoff,eligible,now:Date.now(),lastSuccess:data.health.lastSuccess||0}):null;
   const next=learning||(cyclePlan.complete?(nextVerifiedRegion(cyclePlan,{tried,checked,backoff,failedSinceSuccess:new Set(data.health.failedRegionsSinceSuccess||[])})||chooseRegion({...args,candidates})):chooseRegion({...args,candidates:verified})||chooseRegion({...args,candidates}));
   data.health.verifiedRegionCount=verified.length;
   data.health.estimatedCoverageSeconds=Math.ceil(verified.length/maxRequests)*INTERVAL_SECONDS;
-  if(learning){data.health.learningAttempted||={};data.health.learningAttempted[next.zip]=Date.now()}
   if(!next)break;tried.add(next.zip);attempts++;budgetUsed++;
   const requestId=crypto.randomUUID(),at=Date.now();let result;
   try{result=validateRegionalResponse(await collectLocal(next.zip,products,stores),products.length)}catch(e){result={status:0,stores:[],error:e.message,serviceStatus:e.status||0}}
+  if(learning){data.health.learningAttempted||={};const previous=data.health.learningAttempted[next.zip];data.health.learningAttempted[next.zip]={at,status:result.status,attempts:(previous?.attempts||0)+1}}
   firstResult||={at,httpStatus:result.status,stores:result.stores?.length||0,error:result.error||null};if(result.error||result.status!==200)validationErrors++;
   const events=applyObservation(data,{requestId,at,stores:result.stores||[],httpStatus:result.status,error:result.error,source:'mac-local'});
   if(!result.error&&result.status===200){coverage[next.zip]=result.stores.map(s=>s.id);for(const item of result.stores){checked.add(item.id);passSeen.add(item.id)}}
@@ -84,5 +84,6 @@ async function tick(){
 try{
  if(!data){const info=await api('/api/info');data=emptySnapshot(stores,products,info.startedAt);persist()}
  initializeDailyCounters(data);migrateRegionalPolicy(data.health);
+ data.health.learningAttempted=migrateLearningAttempts(data.health.learningAttempted||{},(zip,at)=>db.prepare('SELECT at,status FROM requests WHERE zip=? AND at>=? AND at<=? ORDER BY at LIMIT 1').get(zip,at,at+1000));
  while(!stopping){const start=Date.now();try{await tick()}catch(e){console.error(new Date().toISOString(),e.message)}if(process.argv.includes('--once'))break;let delay=nextCollectionDelay(data.health,INTERVAL_SECONDS*1000,Date.now()-start);while(delay>0&&!stopping){await sleep(Math.min(delay,1000));delay-=1000}}
 }finally{persist();storage.close()}

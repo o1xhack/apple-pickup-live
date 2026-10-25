@@ -18,8 +18,20 @@ export function compactVerifiedCoverage(coverage){
  }
  try{const exact=solve((1n<<BigInt(ids.length))-1n);return exact.length<fallback.length?exact.map(({zip,ids})=>({zip,ids})):fallback}catch{return fallback}
 }
-export function learningProposal({proposals,coverage,attempted,backoff,eligible}){
- for(const row of proposals){if(coverage[row.zip]||attempted[row.zip]||backoff.zips.has(row.zip))continue;
+// Legacy timestamps are deliberately blocked unless a recorded 541 identifies
+// the failure. Time passing alone never proves that the source recovered.
+export function migrateLearningAttempts(attempted,lookup){
+ for(const [zip,value] of Object.entries(attempted))if(typeof value==='number'){
+  const result=lookup(zip,value);
+  if(result?.status===541)attempted[zip]={at:result.at,status:541,attempts:1};
+ }
+ return attempted;
+}
+export function learningProposal({proposals,coverage,attempted,backoff,eligible,now=Date.now(),lastSuccess=0}){
+ for(const row of proposals){
+ const prior=attempted[row.zip];
+ const recovered=prior&&typeof prior==='object'&&prior.status===541&&prior.attempts===1&&now-prior.at>=1800000&&lastSuccess>prior.at;
+ if(coverage[row.zip]||(prior&&!recovered)||backoff.zips.has(row.zip))continue;
  const ids=row.ids.filter(id=>eligible.has(id)&&!backoff.stores.has(id));if(ids.length)return {...row,ids,gain:ids.length,targetStore:ids[0],learning:true};}
  return null;
 }

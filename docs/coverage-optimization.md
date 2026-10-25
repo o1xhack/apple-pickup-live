@@ -27,3 +27,7 @@ A bounded exact set-cover search over the 53 observed regional memberships reduc
 ## Regional failure policy update
 
 The old two-region 541 heuristic was removed after log review showed both interleaved failures/successes and consecutive cross-region failures. Two failures do not prove that unqueried regions are blocked. Collection now continues to untried regions, retaining region cooldowns and the reduced request budget. A successful response resets the failure pass; global heuristic backoff requires every planned region to fail. Explicit server Retry-After and 403/429 remain immediate global stop conditions. New diagnostic rows persist source, round start, Retry-After and pause reason; old missing values are not backfilled as zero.
+
+### Recovering blocked learning proposals
+
+A failed 541 does not disprove a candidate hub's geographic coverage. A candidate may receive one bounded retry after 30 minutes, only after a later successful normal query confirms source recovery and its regional backoff expires. The retry replaces an existing learning slot; it adds no requests. Two attempts is the lifetime limit. Other failure types and unmatched legacy attempts remain skipped. Global cooldown is preserved.
