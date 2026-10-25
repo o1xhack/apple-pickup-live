@@ -8,3 +8,5 @@ state.local/
 .dev.vars
 *.log
 .DS_Store
+
+/pages-dist/

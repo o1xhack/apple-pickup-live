@@ -30,3 +30,5 @@ test('blocking persistently reduces load and recovers gradually, never immediate
  // Restoring saved cooldown without a stored budget must not resume at full load.
  assert.equal(requestBudget({cooldownUntil:2000000},1000),18);
 });
+
+test('three-minute collection spreads its adaptive budget over the full round',async()=>{const {collectionSchedule}=await import('../shared/schedule.js');assert.deepEqual(collectionSchedule({requestBudget:36},180),{intervalMs:180000,budget:36,spacingMs:5000});assert.equal(collectionSchedule({requestBudget:18},180).spacingMs,10000);assert.equal(collectionSchedule({requestBudget:4},180).spacingMs,45000)});
