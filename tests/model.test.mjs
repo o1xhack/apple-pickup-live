@@ -24,3 +24,9 @@ test('failure never means out of stock; old success becomes stale; recovery is n
 test('ZIP search only filters stored geography and sorts by distance',()=>{
  const z={'95125':[37.3,-121.9,'San Jose','CA']};const nearby=filterStores(stores,{zip:'95125',radius:100},z);assert.equal(nearby.length,1);assert.equal(nearby[0].id,'a');assert.equal(nearby[0].distance,0);assert.throws(()=>filterStores(stores,{zip:'99999'},z));
 });
+
+test('blocking persistently reduces load and recovers gradually, never immediately',async()=>{
+ const {requestBudget,reduceBudget}=await import('../shared/budget.js');const h={};assert.equal(requestBudget(h,1000),36);assert.equal(reduceBudget(h,1000),18);assert.equal(requestBudget(h,60000),18);assert.equal(requestBudget(h,1801000),19);assert.equal(reduceBudget(h,1802000),9);reduceBudget(h,1803000);reduceBudget(h,1804000);assert.equal(h.requestBudget,4);
+ // Restoring saved cooldown without a stored budget must not resume at full load.
+ assert.equal(requestBudget({cooldownUntil:2000000},1000),18);
+});

@@ -26,7 +26,9 @@ online, and logged in for its LaunchAgent to collect. The site still serves save
 observations when the collector is unavailable, with explicit stale status.
 
 There is a 52,000/day collector request cap. HTTP 403/429/541 or three consecutive
-failures trigger persistent 5/10/20/30-minute backoff. There is no rotating proxy,
+failures trigger persistent 5/10/20/30-minute backoff and halve the regional
+request budget (minimum four/round). It increases by one only after a 30-minute
+recovery period without another block. There is no rotating proxy,
 challenge bypass, guarantee against Apple blocking, or automatic paid-plan upgrade.
 
 Cloudflare free-tier limits still apply: Workers request/CPU limits, D1 storage and
