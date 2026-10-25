@@ -2,6 +2,7 @@ import stores from '../data/us-stores.json';
 import products from '../data/products.json';
 import hubsData from '../data/polling-hubs.json';
 import {emptySnapshot,parseApple,applyObservation,viewCell} from '../shared/model.js';
+import {parseRetryAfter} from '../shared/throttle.js';
 const json=(body,status=200,extra={})=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store',...extra}});
 const safeEqual=(a,b)=>{if(!a||!b||a.length!==b.length)return false;let out=0;for(let i=0;i<a.length;i++)out|=a.charCodeAt(i)^b.charCodeAt(i);return out===0};
 const asBytes=value=>value instanceof ArrayBuffer?new Uint8Array(value):Uint8Array.from(value);
@@ -57,7 +58,7 @@ export default {
     if(!stores.some(s=>s.zip===input.zip)&&!hubsData.hubs.some(h=>h.zip===input.zip))return json({error:'Unknown collection region'},400);
     const start=Date.now();const apple=await fetch(appleUrl(input.zip),{headers:appleHeaders(),signal:AbortSignal.timeout(20000)});let found=[];let error=null;
     if(apple.ok){try{found=parseApple(await apple.json(),products)}catch(e){error=e.message}}else{await apple.body?.cancel();error=`Apple HTTP ${apple.status}`}
-    response=json({status:apple.status,stores:found.filter(x=>stores.some(s=>s.id===x.id)),at:start,durationMs:Date.now()-start,error});
+    response=json({status:apple.status,stores:found.filter(x=>stores.some(s=>s.id===x.id)),at:start,durationMs:Date.now()-start,error,retryAfterSeconds:parseRetryAfter(apple.headers.get('retry-after'))});
    }else response=json({error:'Not found'},404);
    return apiHeaders(response);
   }catch(error){return apiHeaders(json({error:String(error.message||'Request failed')},500))}
@@ -68,3 +69,4 @@ export default {
 };
 export function appleUrl(zip){const url=new URL('https://www.apple.com/shop/retail/pickup-message');url.searchParams.set('pl','true');url.searchParams.set('mts.0','regular');url.searchParams.set('location',zip);products.forEach((p,i)=>url.searchParams.set(`parts.${i}`,p.part));return url.toString()}
 export function appleHeaders(){return {'accept':'application/json','referer':'https://www.apple.com/shop/buy-iphone/iphone-duo','user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36'}}
+

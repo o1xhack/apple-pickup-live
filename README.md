@@ -14,12 +14,12 @@ Fallback: https://apple-pickup-live.o1xhack.workers.dev
 
 ## Architecture
 
-A separate Node collector on a Mac runs one collection round every 180 seconds, with requests spread across the round.
+A separate Node collector on a Mac runs one collection round every 300 seconds, with requests spread across the round.
 It asks an authenticated Cloudflare endpoint for fixed-catalog regional Apple
 pickup results. Apple sees Cloudflare egress, not the desktop app's Mac egress.
 The collector learns actual store coverage, prioritizes old/missing stores,
-limits each round to up to 36 requests over 180 seconds, and persists state in its own SQLite
-database. A complete nationwide sweep is **not** guaranteed every three minutes during adaptive throttling or cooldown.
+limits each round to up to 36 requests over 300 seconds, and persists state in its own SQLite
+database. A complete nationwide sweep is **not** guaranteed every five minutes during adaptive throttling or cooldown.
 
 Once per round it publishes a compressed cumulative checkpoint plus state changes
 to Cloudflare D1. The public website only reads this database. Browser feed refresh
@@ -112,11 +112,13 @@ separate notices. Apple / iPhone marks belong to Apple; this site is unaffiliate
 独立的全美 iPhone Duo 库存网站，支持 ZIP 附近门店、容量／颜色筛选、地图、
 历史变化与日期统计。访问者只查询已采集数据，不向 Apple 发起额外请求。
 
-Mac 独立采集器每 180 秒启动一轮，并把区域请求均匀摊开，Cloudflare 负责 Apple 查询出口与公开网站，
-D1 保存共享快照。不是每家店都能严格每 180 秒刷新；受预算、分区覆盖与冷却影响，
+Mac 独立采集器每 300 秒启动一轮，并把区域请求均匀摊开，Cloudflare 负责 Apple 查询出口与公开网站，
+D1 保存共享快照。不是每家店都能严格每 300 秒刷新；受预算、分区覆盖与冷却影响，
 以门店显示的采样时间为准。失败、未知与过期不能视为无货。
 
 原桌面 App、监控配置、Bark 通知保持独立。Mac 需要开机、登录且联网才能继续采集；
 关闭后网站仍能看历史，但会标注数据过期。没有开通收费计划，流量增长仍可能触及免费额度。
 
 Custom domain: Cloudflare Pages serves public assets and reads the existing Worker API using public CORS. Only the `pickup` CNAME is added at DNSPod; existing domain records and nameservers remain unchanged. Run `npm run deploy:pages` after frontend changes, and `npm run deploy` after Worker/API changes.
+
+A single HTTP 541 quarantines its collection region. Two consecutively blocked regions trigger global backoff; 403/429, explicit Retry-After, or three consecutive service failures still pause globally. Coverage progress persists across rounds and the greedy planner minimizes repeated coverage. Upload retries apply only to our idempotent ingestion endpoint, never to Apple queries.
