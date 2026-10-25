@@ -44,13 +44,13 @@ async function tick(){
   if(budgetUsed>=52000){data.health.message='Daily collection request budget reached';data.health.cooldownUntil=dayStart+86400000;break}
   const backoff=regionBackoff(data.health);
   const candidates=[...hubs.map(h=>({zip:h.zip,ids:h.expectedStoreIds})),...stores.map(s=>({zip:s.zip,ids:[s.id]}))];
-  const verified=compactVerifiedCoverage(coverage);
+  const verified=cyclePlan.complete?cyclePlan.regions:compactVerifiedCoverage(coverage);
   const args={stores,coverage,seen:passSeen,checked,backoff,snapshot:data,now:Date.now(),intervalMs:schedule.intervalMs,tried};
   const eligible=new Set(stores.filter(s=>!checked.has(s.id)&&!passSeen.has(s.id)).map(s=>s.id));
   // At most one replacement query per round learns a better hub. It consumes
   // the existing adaptive budget; predictions never certify any store.
-  const learning=!cyclePlan.complete&&attempts===0?learningProposal({proposals,coverage,attempted:data.health.learningAttempted||{},backoff,eligible}):null;
-  const next=cyclePlan.complete?(nextVerifiedRegion(cyclePlan,{tried,checked,backoff})||chooseRegion({...args,candidates})):learning||chooseRegion({...args,candidates:verified})||chooseRegion({...args,candidates});
+  const learning=(!cyclePlan.complete||maxRequests<cyclePlan.regions.length)&&attempts===0?learningProposal({proposals,coverage,attempted:data.health.learningAttempted||{},backoff,eligible}):null;
+  const next=learning||(cyclePlan.complete?(nextVerifiedRegion(cyclePlan,{tried,checked,backoff})||chooseRegion({...args,candidates})):chooseRegion({...args,candidates:verified})||chooseRegion({...args,candidates}));
   data.health.verifiedRegionCount=verified.length;
   data.health.estimatedCoverageSeconds=Math.ceil(verified.length/maxRequests)*INTERVAL_SECONDS;
   if(learning){data.health.learningAttempted||={};data.health.learningAttempted[next.zip]=Date.now()}

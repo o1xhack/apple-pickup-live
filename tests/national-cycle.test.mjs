@@ -20,7 +20,7 @@ test('resting regions and missing response membership cannot be certified as ful
 
 test('recorded US regional membership covers all 269 stores within the five-minute request window',async()=>{
  const {readFileSync}=await import('node:fs');const stores=JSON.parse(readFileSync(new URL('../data/us-stores.json',import.meta.url))),fixture=JSON.parse(readFileSync(new URL('./fixtures/observed-region-membership.json',import.meta.url)));
- const plan=verifiedCyclePlan(fixture.coverage,stores,{stores:{}}),health={requestBudget:11},checked=new Set(),tried=new Set(),backoff={stores:new Set(),zips:new Set()};assert.equal(plan.covered,269);assert.ok(plan.regions.length<=36);activateFiveMinuteTarget(health,plan,1000);const schedule=nationalSchedule(health,plan);let attempts=0;
+ const plan=verifiedCyclePlan(fixture.coverage,stores,{stores:{}}),health={requestBudget:11},checked=new Set(),tried=new Set(),backoff={stores:new Set(),zips:new Set()};assert.equal(plan.covered,269);assert.equal(plan.regions.length,34);activateFiveMinuteTarget(health,plan,1000);const schedule=nationalSchedule(health,plan);let attempts=0;
  while(true){const region=nextVerifiedRegion(plan,{checked,tried,backoff});if(!region)break;tried.add(region.zip);region.ids.forEach(id=>checked.add(id));attempts++;}
  const summary=coverageRound({startedAt:1000,completedAt:1000+(attempts-1)*schedule.spacingMs+1700,stores,checked,attempts,errors:0,plannedRequests:plan.regions.length});assert.equal(summary.coveredStores,269);assert.equal(summary.status,'complete');assert.ok(summary.elapsedMs<300000);
 });
