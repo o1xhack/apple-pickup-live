@@ -18,8 +18,9 @@ export function nationalSchedule(health,plan,seconds=300){
  if(plan.complete&&plan.regions.length<=schedule.budget)schedule.spacingMs=Math.floor((schedule.intervalMs-20000)/Math.max(1,plan.regions.length));
  return schedule;
 }
-export function nextVerifiedRegion(plan,{tried,checked,backoff}){
- return plan.regions.find(r=>!tried.has(r.zip)&&!backoff.zips.has(r.zip)&&r.ids.some(id=>!checked.has(id)&&!backoff.stores.has(id)))||null;
+export function nextVerifiedRegion(plan,{tried,checked,backoff,failedSinceSuccess=new Set()}){
+ const eligible=r=>!tried.has(r.zip)&&!backoff.zips.has(r.zip)&&r.ids.some(id=>!checked.has(id)&&!backoff.stores.has(id));
+ return plan.regions.find(r=>eligible(r)&&!failedSinceSuccess.has(r.zip))||plan.regions.find(eligible)||null;
 }
 export function coverageRound({startedAt,completedAt,stores,checked,attempts,errors,plannedRequests}){
  const missing=stores.filter(s=>!checked.has(s.id)).map(s=>s.id);const elapsedMs=completedAt-startedAt;

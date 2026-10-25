@@ -1,3 +1,4 @@
+import {initializeDailyCounters,recordDailyObservation} from './daily.js';
 // Stock observations are not a count of phones, reservations or restocks.
 export const CODES={in_stock:'1',out_of_stock:'0',unknown:'U',pickup_not_open:'P'};
 export function emptySnapshot(stores,products,startedAt=Date.now()){
@@ -24,10 +25,12 @@ export function applyObservation(snapshot,{requestId,at,stores=[],httpStatus=200
  if(snapshot.lastRequestId===requestId)return [];
  snapshot.lastRequestId=requestId;snapshot.totals.requests++;
  if(error||httpStatus!==200){snapshot.totals.errors++;snapshot.health.message=error||`Apple HTTP ${httpStatus}`;return []}
+ initializeDailyCounters(snapshot);
  const events=[];
  for(const row of stores){const target=snapshot.stores[row.id];if(!target)continue;
   for(let i=0;i<snapshot.products.length;i++){
    const code=row.codes[i]||'U';const cell=target.cells[i];if(at<=cell.at)continue;
+   recordDailyObservation(cell,at,code);
    const previous=cell.code;const gap=cell.at===0||at-cell.at>600000||previous==='U';
    cell.code=code;cell.at=at;cell.source=source;cell.checks++;snapshot.totals.checks++;
    if(code==='1'){cell.hits++;snapshot.totals.hits++;cell.lastHit=at;if(!cell.firstHit)cell.firstHit=at;if(previous!=='1'||gap)cell.intervals++;}

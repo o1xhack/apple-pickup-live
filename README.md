@@ -29,9 +29,10 @@ is every 15 seconds while visible; it does not poll Apple. The Mac must be awake
 online, and logged in for its LaunchAgent to collect. The site still serves saved
 observations when the collector is unavailable, with explicit stale status.
 
-There is a 52,000/day collector request cap. HTTP 403/429/541 or three consecutive
-failures trigger persistent 5/10/20/30-minute backoff and halve the regional
-request budget (minimum four/round). It increases by one only after a 30-minute
+There is a 52,000/day collector request cap. A single 541 rests its region and collection continues elsewhere. If every
+planned region fails without an intervening success, global backoff applies.
+HTTP 403/429 or an explicit Retry-After also pause globally. Global backoff uses
+5/10/20/30 minutes and halves the request budget (minimum four/round). It increases by one only after a 30-minute
 recovery period without another block. There is no rotating proxy,
 challenge bypass, guarantee against Apple blocking, or automatic paid-plan upgrade.
 
@@ -88,9 +89,9 @@ and are approximate straight-line miles, not driving distances. See
 - **First/recovered:** first sighting or a sighting after a sampling gap; not proven restock.
 - **Restock candidate:** adjacent valid out-of-stock → in-stock observations.
 - **Unknown / unscanned / pickup not open / stale:** kept distinct from confirmed out of stock.
-- Fresh means checked within five minutes. Failures do not overwrite the last success.
+- Public recent-stock labels use fifteen minutes; the collector still targets five-minute nationwide coverage. Failures do not overwrite the last success.
 - History lists availability changes and can filter in-stock results before pagination; Statistics includes unchanged repeated checks.
-- The homepage has eight scoped metrics. Fresh counts use a five-minute window; cumulative counts start at the public site launch. Every repeated in-stock store × SKU result increments the hit count.
+- The homepage has eight scoped metrics. Stock and header recent-check coverage use fifteen minutes. Stores checked today, in-stock observations today and configuration checks today reset at 00:00 America/Los_Angeles. Cumulative counts start at the public site launch. Every repeated in-stock store × SKU result increments the hit count. Million-scale cards use M/K notation (1,234,567 → 1M 234K) with the exact value retained in their tooltip/accessibility label.
 - The public product scope is iPhone Duo only. Earlier CA Duo history is combined automatically in History/Statistics, without source/model controls; it is excluded from homepage since-launch counters.
 - Raw HTTP/collector errors remain in operational logs, not public banners. Per-store age/stale labels remain visible.
 - Date comparisons use saved cumulative checkpoints, not exact sub-minute boundaries.
@@ -126,4 +127,4 @@ D1 保存共享快照。不是每家店都能严格每 300 秒刷新；受预算
 
 Custom domain: Cloudflare Pages serves public assets and reads the existing Worker API using public CORS. Only the `pickup` CNAME is added at DNSPod; existing domain records and nameservers remain unchanged. Run `npm run deploy:pages` after frontend changes, and `npm run deploy` after Worker/API changes.
 
-A single HTTP 541 quarantines its collection region. Two consecutively blocked regions trigger global backoff; 403/429, explicit Retry-After, or three consecutive service failures still pause globally. Coverage progress persists across rounds and the greedy planner minimizes repeated coverage. Upload retries apply only to our idempotent ingestion endpoint, never to Apple queries.
+A single HTTP 541 quarantines its collection region. Two blocked regions do not imply a nationwide failure. The collector tries the remaining planned regions first; all-region failure, 403/429 or explicit Retry-After trigger global backoff. Coverage progress persists across rounds and the greedy planner minimizes repeated coverage. Upload retries apply only to our idempotent ingestion endpoint, never to Apple queries.

@@ -33,7 +33,7 @@ export default {
   const url=new URL(request.url);try{
    if(!url.pathname.startsWith('/api/'))return env.ASSETS.fetch(request);
    let response;
-   if(url.pathname==='/api/info')response=json({startedAt:await siteStart(env),stores:stores.length,products,version:'0.1.0',legacy:await legacyMetadata(env),freshSeconds:300,source:'Apple pickup observations',coordinateAccuracy:'ZIP estimates, approximate straight-line distance'});
+   if(url.pathname==='/api/info')response=json({startedAt:await siteStart(env),stores:stores.length,products,version:'0.1.0',legacy:await legacyMetadata(env),freshSeconds:900,source:'Apple pickup observations',coordinateAccuracy:'ZIP estimates, approximate straight-line distance'});
    else if(url.pathname==='/api/legacy/statistics'){try{response=json(await legacyStatistics(env,url,stores,historyProducts))}catch(error){response=json({error:error.message},400)}}
    else if(url.pathname==='/api/latest'||url.pathname==='/api/checkpoint'){
     const at=Number(url.searchParams.get('at')||Date.now());if(!Number.isFinite(at))return json({error:'Invalid time'},400);

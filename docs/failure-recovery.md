@@ -16,10 +16,15 @@ samples are prioritized; repeated overlapping coverage is reduced.
 ## Errors and retries
 
 - A single 541 rests that region and its known stores for 5/10/20/30 minutes.
-- Two consecutively blocked regions trigger global backoff. A successful request
-  breaks that streak. 403/429 and explicit Retry-After pause globally immediately.
-- Three consecutive service/network failures also pause globally. Existing global
-  cooldown is preserved on restart; success is never invented during that gap.
+- 541 failures pause only their regions; remaining regions continue. Only failure
+  across every planned region without an intervening success triggers heuristic
+  global backoff. 403/429 and explicit Retry-After pause globally immediately.
+- Failed regions are tracked across partial-budget rounds, and untried regions
+  are prioritized so a subset of failing regions cannot starve the remainder.
+- A one-time migration replaces the old two-541 heuristic where the same round
+  had successes, preserving the lower budget and any recorded explicit server
+  wait. Old request rows without saved Retry-After remain null (unknown). New
+  rows persist the round, transport, parsed Retry-After and global-pause reason.
 - Apple queries are not retried immediately. They wait for the normal paced schedule.
 - Our own idempotent ingestion retries at most three times (2s/4s waits), retaining
   unsent events. Authorization/payload errors do not enter that retry loop.

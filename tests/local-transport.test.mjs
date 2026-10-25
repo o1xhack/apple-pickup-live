@@ -6,10 +6,10 @@ test('Mac collector calls Apple directly, batches products and preserves failure
  assert.equal(out.status,200);assert.equal(calls,1);assert.equal(out.stores[0].codes,'10');
  const failed=await collectLocal('95014',products,[],{fetchImpl:async()=>new Response('blocked',{status:541,headers:{'retry-after':'300'}})});assert.equal(failed.status,541);assert.equal(failed.retryAfterSeconds,300);assert.equal(failed.stores.length,0);
 });
-test('live totals count repeat in-stock store/configuration observations, and freshness is exactly five minutes',()=>{
+test('live totals count repeat in-stock store/configuration observations, and freshness is exactly fifteen minutes',()=>{
  const stores=[{id:'A'},{id:'B'}],products=[{part:'p1'},{part:'p2'}],s=emptySnapshot(stores,products,1);
  applyObservation(s,{requestId:'1',at:1000,stores:[{id:'A',codes:'11'}]});
  applyObservation(s,{requestId:'2',at:301000,stores:[{id:'A',codes:'11'}]});
  let m=liveMetrics(s,stores,[0,1],301000);assert.equal(m.hits,4);assert.equal(m.checks,4);assert.equal(m.stockConfigurations,2);assert.equal(m.stockStores,1);assert.equal(m.everStockStores,1);assert.equal(m.awaitingFreshStores,1);
- assert.equal(liveMetrics(s,stores,[0,1],601000).freshStores,1);m=liveMetrics(s,stores,[0,1],601001);assert.equal(m.freshStores,0);assert.equal(m.hits,4);assert.equal(m.stockStores,0);
+ assert.equal(liveMetrics(s,stores,[0,1],1201000).freshStores,1);m=liveMetrics(s,stores,[0,1],1201001);assert.equal(m.freshStores,0);assert.equal(m.hits,4);assert.equal(m.stockStores,0);
 });

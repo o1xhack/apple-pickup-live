@@ -1,4 +1,5 @@
 import {verifiedCyclePlan,activateFiveMinuteTarget,nationalSchedule,nextVerifiedRegion,coverageRound} from '../shared/national-cycle.js';
+import {initializeDailyCounters} from '../shared/daily.js';
 import {queueValidation,validateRound,nextCollectionDelay} from '../shared/deployment-validation.js';
 import {collectLocal} from './apple.mjs';
 import {CollectionStorage} from './storage.mjs';
@@ -12,7 +13,7 @@ import {gzipSync,gunzipSync} from 'node:zlib';
 import {emptySnapshot,applyObservation} from '../shared/model.js';
 import {requestBudget,reduceBudget} from '../shared/budget.js';
 import {normalizeBudgetPeriod} from '../shared/schedule.js';
-import {regionBackoff,recordResult} from '../shared/throttle.js';
+import {regionBackoff,recordResult,migrateRegionalPolicy} from '../shared/throttle.js';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const config=Object.fromEntries(readFileSync(resolve(root,'.env.local'),'utf8').split('\n').filter(l=>l.includes('=')).map(l=>{const i=l.indexOf('=');return [l.slice(0,i),l.slice(i+1)]}));
 const stores=JSON.parse(readFileSync(resolve(root,'data/us-stores.json'))),products=JSON.parse(readFileSync(resolve(root,'data/products.json')));
@@ -50,7 +51,7 @@ async function tick(){
   // At most one replacement query per round learns a better hub. It consumes
   // the existing adaptive budget; predictions never certify any store.
   const learning=(!cyclePlan.complete||maxRequests<cyclePlan.regions.length)&&attempts===0?learningProposal({proposals,coverage,attempted:data.health.learningAttempted||{},backoff,eligible}):null;
-  const next=learning||(cyclePlan.complete?(nextVerifiedRegion(cyclePlan,{tried,checked,backoff})||chooseRegion({...args,candidates})):chooseRegion({...args,candidates:verified})||chooseRegion({...args,candidates}));
+  const next=learning||(cyclePlan.complete?(nextVerifiedRegion(cyclePlan,{tried,checked,backoff,failedSinceSuccess:new Set(data.health.failedRegionsSinceSuccess||[])})||chooseRegion({...args,candidates})):chooseRegion({...args,candidates:verified})||chooseRegion({...args,candidates}));
   data.health.verifiedRegionCount=verified.length;
   data.health.estimatedCoverageSeconds=Math.ceil(verified.length/maxRequests)*INTERVAL_SECONDS;
   if(learning){data.health.learningAttempted||={};data.health.learningAttempted[next.zip]=Date.now()}
@@ -60,13 +61,13 @@ async function tick(){
   firstResult||={at,httpStatus:result.status,stores:result.stores?.length||0,error:result.error||null};if(result.error||result.status!==200)validationErrors++;
   const events=applyObservation(data,{requestId,at,stores:result.stores||[],httpStatus:result.status,error:result.error,source:'mac-local'});
   if(!result.error&&result.status===200){coverage[next.zip]=result.stores.map(s=>s.id);for(const item of result.stores){checked.add(item.id);passSeen.add(item.id)}}
-  const decision=recordResult(data.health,{zip:next.zip,status:result.status,error:result.error,stores:next.learning?[]:[...new Set([next.targetStore,...next.ids])],retryAfterSeconds:result.retryAfterSeconds||0},at);
+  const decision=recordResult(data.health,{zip:next.zip,status:result.status,error:result.error,stores:next.learning?[]:[...new Set([next.targetStore,...next.ids])],retryAfterSeconds:result.retryAfterSeconds||0,allRegions:cyclePlan.complete?cyclePlan.regions.map(r=>r.zip):hubs.map(r=>r.zip)},at);
   data.health.mode='mac-local';data.health.nextAt=began+schedule.intervalMs;
   const blocked=decision.global;if(blocked){data.health.healthySweeps=0;reduceBudget(data.health)}
   if(passSeen.size===stores.length){data.totals.sweeps++;data.health.lastNationwideCoverageAt=at;passSeen=new Set()}
   data.health.currentCoverageRound={...data.health.currentCoverageRound,attempts,coveredStores:checked.size,errors:validationErrors};
   data.health.coveragePassSeen=[...passSeen];data.health.regionsResting=regionBackoff(data.health).zips.size;
-  try{storage.record(data,coverage,{id:requestId,at,zip:next.zip,status:result.status,duration:result.durationMs||0,stores:result.stores?.length||0,error:result.error},events)}catch(error){const committed=storage.load();data=committed.snapshot;for(const key of Object.keys(coverage))delete coverage[key];Object.assign(coverage,committed.coverage);throw error}
+  try{storage.record(data,coverage,{id:requestId,at,zip:next.zip,status:result.status,duration:result.durationMs||0,stores:result.stores?.length||0,error:result.error,source:'mac-local',roundStartedAt:began,retryAfterSeconds:result.retryAfterSeconds??null,cooldownReason:decision.reason||null},events)}catch(error){const committed=storage.load();data=committed.snapshot;for(const key of Object.keys(coverage))delete coverage[key];Object.assign(coverage,committed.coverage);throw error}
   if(blocked)break;
   // Publish each result immediately; public searches never trigger Apple.
   // Save a heartbeat before spacing out the next request, without bursting at round start.
@@ -82,5 +83,6 @@ async function tick(){
 }
 try{
  if(!data){const info=await api('/api/info');data=emptySnapshot(stores,products,info.startedAt);persist()}
+ initializeDailyCounters(data);migrateRegionalPolicy(data.health);
  while(!stopping){const start=Date.now();try{await tick()}catch(e){console.error(new Date().toISOString(),e.message)}if(process.argv.includes('--once'))break;let delay=nextCollectionDelay(data.health,INTERVAL_SECONDS*1000,Date.now()-start);while(delay>0&&!stopping){await sleep(Math.min(delay,1000));delay-=1000}}
 }finally{persist();storage.close()}
