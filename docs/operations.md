@@ -8,6 +8,7 @@
 - Public API tests verify compressed database snapshots round-trip as valid JSON, unauthenticated collection/ingest reject before any Apple query, invalid filters reject, and history/series return stored data.
 - Local SQLite state and public counters survived switching from foreground collection to the independent LaunchAgent.
 - The first extended sample included 206 HTTP 200 queries, seven HTTP 503 and one HTTP 541. Collection immediately entered a five-minute cooldown on the 541. This disproves any claim that a Cloudflare exit avoids all blocking.
+- At 19:25 UTC, the independent service automatically resumed after the five-minute cooldown: 18/18 requests succeeded, covering 171 stores in that round, with counters preserved. This verifies one recovery, not long-term reliability.
 - The adaptive budget was added after that result: halve regional requests on failures, retain the budget and cooldown across restarts, and recover slowly. It is a load-control mechanism, not a guarantee of uninterrupted stock data.
 
 ## Check health without querying Apple
