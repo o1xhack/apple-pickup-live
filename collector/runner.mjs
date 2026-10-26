@@ -34,7 +34,17 @@ const loaded=storage.load();let data=loaded.snapshot;const coverage=loaded.cover
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const api=(path,body)=>requestJSON(config.PUBLISH_URL,path,body,{token:config.INGEST_TOKEN});
 const persist=()=>storage.save(data,coverage);
-async function publish(){data.publishedAt=Date.now();persist();const events=storage.pending();await publishWithRetry(()=>api('/api/ingest',{snapshot:data,events:events.map(e=>JSON.parse(e.payload))}));storage.acknowledge(events,data)}
+async function publish(){
+ const now=Date.now();data.publishedAt=now;data.health.liveUpdateSeconds=300;persist();
+ if(now>=(data.health.nextLivePublishAt||0)){
+  const live=await api('/api/live/publish',{snapshot:data});data.health.nextLivePublishAt=live.nextAt;persist();
+ }
+ if(data.health.historySyncResumeAt>now){const cloud=data.health.shards?.sources?.cloudflare;if(cloud){cloud.cooldownUntil=Math.max(cloud.cooldownUntil||0,data.health.historySyncResumeAt);cloud.servicePauseReason='d1-quota';cloud.servicePauseUntil=data.health.historySyncResumeAt}persist();return;}
+ const events=storage.pending(),checkpoints=storage.pendingCheckpoints();
+ const result=await publishWithRetry(()=>api('/api/ingest',{snapshot:data,events:events.map(e=>JSON.parse(e.payload)),checkpoints:checkpoints.map(c=>c.snapshot)}));
+ if(result.historyPersisted===false){data.health.historySyncResumeAt=result.retryAt;data.health.historySyncStatus='queued';const cloud=data.health.shards?.sources?.cloudflare;if(cloud){cloud.cooldownUntil=Math.max(cloud.cooldownUntil||0,result.retryAt);cloud.servicePauseReason='d1-quota';cloud.servicePauseUntil=result.retryAt}persist();return}
+ data.health.historySyncStatus='synced';data.health.historySyncResumeAt=0;storage.acknowledge(events,data,checkpoints);
+}
 let budgetDay=new Date().setUTCHours(0,0,0,0),budgetUsed=db.prepare('SELECT count(*) n FROM requests WHERE at>=?').get(budgetDay).n;
 async function tick(){
  if(config.COLLECTION_MODE==='fixed-split'){try{return await collectShardedRound({data,coverage,plan:shardPlan,stores,products,storage,collectMac:zip=>collectLocal(zip,products,stores),collectCloudflare:task=>api('/api/collector/check',task),publish,isStopping:()=>stopping})}catch(error){const committed=storage.load();data=committed.snapshot;for(const key of Object.keys(coverage))delete coverage[key];Object.assign(coverage,committed.coverage);throw error}}

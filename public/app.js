@@ -35,7 +35,7 @@ function render(){if(!snapshot)return;try{shown=filterStores(catalog,selections(
  $('search-context').textContent=filter.zip?tr(`Within approximately ${filter.radius} miles · based on saved observations, never a new Apple request.`,`约 ${filter.radius} mile 范围 · 搜索已有采样，不额外请求 Apple。`):tr('Search saved observations. Searching never sends a request to Apple.','搜索只筛选已有采样，不会额外请求 Apple。');
  renderHealth();renderCards();renderMap();if(tab==='stats'&&statsData)renderReport();
 }
-function renderHealth(){const health=snapshot.health||{},now=Date.now(),waiting=health.cooldownUntil>now,offline=now-snapshot.publishedAt>180000;
+function renderHealth(){const health=snapshot.health||{},now=Date.now(),waiting=health.cooldownUntil>now,offline=now-snapshot.publishedAt>Math.max(180000,(health.liveUpdateSeconds||0)*1000+120000);
  const pill=$('feed-pill');pill.className='feed-pill'+(waiting||offline?' waiting':'');pill.textContent=waiting?tr('Next scan scheduled','等待下一轮更新'):offline?tr('Showing saved observations','显示已保存的采样'):tr('Inventory updates running','库存持续更新中');
  $('updated').textContent=tr('Synced ','同步于 ')+ago(snapshot.publishedAt);const observed=catalog.filter(s=>snapshot.stores[s.id]?.cells.every(c=>c.at&&now-c.at<=FRESH_WINDOW_MS)).length;$('coverage').textContent=tr(`${observed} / ${catalog.length} stores checked in the past 15 min`,`${observed} / ${catalog.length} 家门店于 15 分钟内检查`);
  $('notice').hidden=true;

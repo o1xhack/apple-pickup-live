@@ -25,5 +25,11 @@
     "crons": [
       "0 8 * * *"
     ]
-  }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "LIVE_CACHE",
+      "id": "4a113361af2445e281b1601e0399e58b"
+    }
+  ]
 }

@@ -23,12 +23,12 @@ export async function collectShardedRound({data,coverage,plan,stores,products,st
   const {source,health,next}=selected,at=now(),requestId=crypto.randomUUID();tried.add(next.zip);used[source]++;nextSourceAt[source]=at+Math.ceil(300000/quota[source]);health.nextRequestAt=nextSourceAt[source];
   let result;
   try{result=await(source==='mac-local'?collectMac(next.zip):collectCloudflare({zip:next.zip,requestId,planVersion:plan.version,at}));
-   if(result.skipped){health.cooldownUntil=Math.max(health.cooldownUntil||0,result.retryAt||at+60000);continue}
+   if(result.skipped){health.cooldownUntil=Math.max(health.cooldownUntil||0,result.retryAt||at+60000);health.servicePauseReason=result.reason||'execution-lease';health.servicePauseUntil=result.retryAt||at+60000;continue}
    result=validateRegionalResponse(result,products.length);
   }catch(error){result={status:0,stores:[],error:error.message,serviceStatus:error.status||0}}
   // Drop incidental neighboring stores owned by the other shard before counting.
   const rows=shardRows(plan,source,result.stores||[]).filter(row=>!checked.has(row.id));attempts++;health.requests++;const success=result.status===200&&!result.error;
-  if(success){health.successes++;health.lastSuccess=at;for(const row of rows)checked.add(row.id)}else{health.errors++;errors++}
+  if(success){delete health.servicePauseReason;delete health.servicePauseUntil;health.successes++;health.lastSuccess=at;for(const row of rows)checked.add(row.id)}else{health.errors++;errors++}
   const events=applyObservation(data,{requestId,at,stores:rows,httpStatus:result.status,error:result.error,source});
   const decision=recordResult(health,{zip:next.zip,status:result.status,error:result.error,retryAfterSeconds:result.retryAfterSeconds||0,allRegions:plan.regions.filter(r=>r.source===source).map(r=>r.zip)},at);
   if(decision.global){health.requestBudget=Math.max(1,Math.floor(health.requestBudget/2));health.recoverBudgetAt=at+3600000}
