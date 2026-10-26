@@ -53,3 +53,23 @@ At 21:09:38 UTC the public collector switched to direct Mac requests, preserving
 ## Fixed regional split experiment
 
 The user authorized a fixed Mac/Cloudflare split after the earlier Mac-only trial. See [fixed-regional-split.md](fixed-regional-split.md) for frozen ownership, independent cooldowns, unchanged aggregate starting budget, duplicate prevention, measurements and rollback. The Mac-only architecture described above is historical; current mode is recorded in the live snapshot.
+
+## Free-tier archive read pressure (2026-10-25)
+
+The D1 dashboard for UTC 2026-10-26 00:00–05:19 showed about 4.16M rows read;
+its top two legacy archive aggregation statements accounted for about 1.80M and
+1.53M. This is database row usage, not outbound Apple query count. Workers daily
+requests were about 8,042 / 100,000 at the inspection, while the new Cloudflare
+shard had sent only 53 Apple requests. Dashboard aggregates are delayed and
+rounded; do not present the user's earlier 77% as conclusively the same metric.
+
+`legacyStatistics` now clamps the effective range to the immutable archive's
+stored start/end, shares bounded in-flight/in-memory results and caches them at
+the edge for five minutes. Both aggregate views use a single SQL statement, so
+the archive is not separately scanned twice for one response. Exact boundary
+samples and filters remain covered by tests. Metadata caching is one minute;
+re-imported archive metadata changes the result key. Failed work is not cached.
+No collection cadence, shard assignment, paid plan or private App is changed.
+Already-consumed daily reads are not refunded by this optimization. Watch actual
+D1 read totals, not only Worker request totals, before concluding free-tier
+capacity is sufficient at larger visitor volumes.
