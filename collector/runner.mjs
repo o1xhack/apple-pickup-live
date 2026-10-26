@@ -1,5 +1,5 @@
 import {collectShardedRound} from './sharded.mjs';
-import {validateShards} from '../shared/shards.js';
+import {validateShards,temporaryMacPlan} from '../shared/shards.js';
 import {verifiedCyclePlan,activateFiveMinuteTarget,nationalSchedule,nextVerifiedRegion,coverageRound} from '../shared/national-cycle.js';
 import {initializeDailyCounters} from '../shared/daily.js';
 import {queueValidation,validateRound,nextCollectionDelay} from '../shared/deployment-validation.js';
@@ -46,7 +46,7 @@ async function publish(){
 }
 let budgetDay=new Date().setUTCHours(0,0,0,0),budgetUsed=db.prepare('SELECT count(*) n FROM requests WHERE at>=?').get(budgetDay).n;
 async function tick(){
- if(config.COLLECTION_MODE==='fixed-split'){try{return await collectShardedRound({data,coverage,plan:shardPlan,stores,products,storage,collectMac:zip=>collectLocal(zip,products,stores),collectCloudflare:task=>api('/api/collector/check',task),publish,isStopping:()=>stopping})}catch(error){const committed=storage.load();data=committed.snapshot;for(const key of Object.keys(coverage))delete coverage[key];Object.assign(coverage,committed.coverage);throw error}}
+ if(config.COLLECTION_MODE==='fixed-split'){try{const activePlan=temporaryMacPlan(shardPlan,data.health,Number(config.TEMPORARY_MAC_COLLECTION_UNTIL));return await collectShardedRound({data,coverage,plan:activePlan,stores,products,storage,collectMac:zip=>collectLocal(zip,products,stores),collectCloudflare:task=>api('/api/collector/check',task),publish,isStopping:()=>stopping})}catch(error){const committed=storage.load();data=committed.snapshot;for(const key of Object.keys(coverage))delete coverage[key];Object.assign(coverage,committed.coverage);throw error}}
  const began=Date.now();queueValidation(data.health,'national-five-minute-v1',began);let validationErrors=0,firstResult=null;normalizeBudgetPeriod(data.health,INTERVAL_SECONDS);requestBudget(data.health,began);const cyclePlan=verifiedCyclePlan(coverage,stores,data);activateFiveMinuteTarget(data.health,cyclePlan,began);const schedule=nationalSchedule(data.health,cyclePlan,INTERVAL_SECONDS);const maxRequests=schedule.budget;data.health.intervalSeconds=INTERVAL_SECONDS;data.health.spacingSeconds=Math.round(schedule.spacingMs/100)/10;data.health.nextAt=began+schedule.intervalMs;let attempts=0;const checked=new Set();let tried=new Set();let passSeen=new Set(data.health.coveragePassSeen||[]);
  if(data.health.cooldownUntil>began){data.health.nextAt=Math.min(began+schedule.intervalMs,data.health.cooldownUntil);data.health.message='Collection is cooling down after request errors';await publish();return}
  data.health.currentCoverageRound={startedAt:began,deadlineAt:began+schedule.intervalMs,plannedRequests:cyclePlan.regions.length,coveredStores:0,totalStores:stores.length,attempts:0,status:'running'};

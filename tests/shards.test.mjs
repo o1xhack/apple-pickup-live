@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {DatabaseSync} from 'node:sqlite';
-import {SOURCES,validateShards,initializeShards,shardRows,summarizeShards} from '../shared/shards.js';
+import {SOURCES,validateShards,initializeShards,shardRows,summarizeShards,temporaryMacPlan} from '../shared/shards.js';
 import {collectShardedRound} from '../collector/sharded.mjs';import {emptySnapshot} from '../shared/model.js';import {executeCloudflare} from '../src/shard-executor.js';
 const plan={version:'fixed-regions-v1',regions:[{zip:'10001',source:'mac-local',ids:['A']},{zip:'10002',source:'mac-local',ids:['B']},{zip:'20001',source:'cloudflare',ids:['C']},{zip:'20002',source:'cloudflare',ids:['D']}],storeOwners:{A:'mac-local',B:'mac-local',C:'cloudflare',D:'cloudflare'}};
 const stores=['A','B','C','D'].map(id=>({id})),products=[{part:'p1'}];
@@ -54,4 +54,25 @@ test('restart retains per-source pacing and cannot recover budget during active 
 test('source freshness excludes historical cells collected by the other source',()=>{
  const data=emptySnapshot(stores,products,1);initializeShards(data.health,plan,1000000);for(const store of Object.values(data.stores))store.cells[0]={...store.cells[0],at:1000000,source:'mac-local'};
  const summary=summarizeShards(data,plan,1000001);assert.equal(summary['mac-local'].freshStores15m,2);assert.equal(summary.cloudflare.freshStores15m,0);
+});
+
+
+test('explicit temporary D1 maintenance uses only Mac at its previous budget and expires to the original assignment',async()=>{
+ let time=1000000;const data=emptySnapshot(stores,products,1);data.health.requestBudget=4;
+ const state=initializeShards(data.health,plan,time);state.sources.cloudflare.servicePauseReason='d1-quota';state.sources.cloudflare.cooldownUntil=2000000;
+ const remoteBefore=structuredClone(state.sources.cloudflare);const active=temporaryMacPlan(plan,data.health,1500000,time);
+ assert.equal(active.regions.filter(r=>r.source==='mac-local').length,4);assert.equal(active.macRequestBudgetCap,2);assert.equal(plan.regions.filter(r=>r.source==='cloudflare').length,2);
+ // Make the previously remote stores oldest so the temporary round must cover them.
+ for(const id of ['A','B'])data.stores[id].cells[0].at=time;
+ const calls=[];await collectShardedRound({data,coverage:{},plan:active,stores,products,storage:{record:()=>{}},collectMac:async zip=>{calls.push({zip,at:time});return {status:200,stores:stores.map(s=>({id:s.id,codes:'1'}))}},collectCloudflare:async()=>{throw Error('Cloudflare must not be called')},publish:async()=>{},now:()=>time,sleep:async ms=>{time+=ms}});
+ assert.equal(calls.length,2);assert.equal(calls[0].zip,'20001');assert.ok(calls[1].at-calls[0].at>=150000);assert.deepEqual(state.sources.cloudflare,remoteBefore);
+ assert.equal(temporaryMacPlan(plan,data.health,1500000,1500000),plan);assert.equal(data.health.temporaryMacCollection,undefined);
+});
+test('temporary reassignment requires an explicit deadline and D1 pause, and preserves Apple Retry-After and regional waits',()=>{
+ const data=emptySnapshot(stores,products,1);data.health.requestBudget=4;const state=initializeShards(data.health,plan,1000000);
+ assert.equal(temporaryMacPlan(plan,data.health,1500000,1000000),plan);
+ const remote=state.sources.cloudflare;remote.servicePauseReason='d1-quota';remote.serverRetryUntil=1200000;remote.regionCooldowns={'20001':{until:1400000,level:2}};
+ assert.equal(temporaryMacPlan(plan,data.health,NaN,1000000),plan);temporaryMacPlan(plan,data.health,1500000,1000000);
+ assert.equal(state.sources['mac-local'].regionCooldowns['20001'].until,1400000);assert.equal(state.sources['mac-local'].regionCooldowns['20002'].until,1200000);
+ assert.equal(temporaryMacPlan(plan,data.health,1500000,1100000).macRequestBudgetCap,2);
 });

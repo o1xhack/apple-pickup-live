@@ -113,3 +113,17 @@ product filters and date statistics use compressed KV/static files and browser
 calculation. D1 remains only for the bounded Cloudflare execution lease/cleanup.
 See [the current architecture, publisher and recovery steps](public-history-architecture.md).
 Do not restore the earlier SQL client to work around a publication problem.
+
+
+### Explicit temporary Mac collection during a D1 service outage
+
+`TEMPORARY_MAC_COLLECTION_UNTIL` is an opt-in Unix-millisecond deadline in ignored
+`.env.local`. Only while the Cloudflare source is paused specifically for D1 quota,
+the coordinator can temporarily assign all regions to Mac. The Mac's existing
+per-round request budget is captured as a cap; it does not inherit the remote budget.
+Requests rotate through oldest regions, retain Apple regional/Retry-After waits,
+and record their actual `mac-local` origin. No duplicate Cloudflare requests run.
+The original checked-in assignment stays intact and resumes automatically on the
+first round after the deadline. This is an explicit maintenance assignment, not
+automatic failover from Apple 541/403/429 failures. More regions share the same Mac
+request allowance, so full nationwide five-minute coverage is not implied.

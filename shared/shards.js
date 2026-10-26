@@ -1,4 +1,18 @@
 export const SOURCES=['mac-local','cloudflare'];
+export function temporaryMacPlan(plan,health,until,now=Date.now()){
+ const remote=health.shards?.sources?.cloudflare,local=health.shards?.sources?.['mac-local'];
+ if(!Number.isSafeInteger(until)||until<=now||remote?.servicePauseReason!=='d1-quota'||!local){delete health.temporaryMacCollection;return plan}
+ const previous=health.temporaryMacCollection;
+ const cap=previous?.until===until?previous.requestBudget:Math.max(1,local.requestBudget);
+ health.temporaryMacCollection={until,requestBudget:cap,reason:'user-authorized-d1-maintenance'};
+ // Preserve outstanding Apple waits; only the D1 service pause is bypassed.
+ local.regionCooldowns||={};
+ for(const region of plan.regions.filter(r=>r.source==='cloudflare')){
+  const old=remote.regionCooldowns?.[region.zip],wait=Math.max(old?.until||0,remote.serverRetryUntil||0);
+  if(wait>now&&wait>(local.regionCooldowns[region.zip]?.until||0))local.regionCooldowns[region.zip]={...old,until:wait,stores:region.ids};
+ }
+ return {...plan,macRequestBudgetCap:cap,regions:plan.regions.map(r=>({...r,source:'mac-local'})),storeOwners:Object.fromEntries(Object.keys(plan.storeOwners).map(id=>[id,'mac-local']))};
+}
 export function validateShards(plan,stores){
  const ids=new Set(stores.map(s=>s.id)),zips=new Set();
  if(plan.version!=='fixed-regions-v1'||Object.keys(plan.storeOwners).length!==ids.size)throw Error('Invalid shard catalog');

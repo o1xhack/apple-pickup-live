@@ -7,7 +7,7 @@ import {validateRegionalResponse} from './transport.mjs';
 // its preassigned regions; neither source ever takes over the other's failures.
 export async function collectShardedRound({data,coverage,plan,stores,products,storage,collectMac,collectCloudflare,publish,isStopping=()=>false,now=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms))}){
  const began=now(),state=initializeShards(data.health,plan,began),used=Object.fromEntries(SOURCES.map(s=>[s,0]));
- const quota=Object.fromEntries(SOURCES.map(source=>[source,shardQuota(state.sources[source],plan.regions.filter(r=>r.source===source).length,began)]));
+ const quota=Object.fromEntries(SOURCES.map(source=>{const count=plan.regions.filter(r=>r.source===source).length;return [source,count?shardQuota(state.sources[source],source==='mac-local'?Math.min(count,plan.macRequestBudgetCap||count):count,began):0]}));
  const budget=quota['mac-local']+quota.cloudflare,spacing=Math.ceil(300000/budget),nextSourceAt={'mac-local':Math.max(began,state.sources['mac-local'].nextRequestAt||0),cloudflare:Math.max(began+spacing,state.sources.cloudflare.nextRequestAt||0)},tried=new Set(),checked=new Set();let attempts=0,errors=0;
  data.health.mode='fixed-split';data.health.intervalSeconds=300;data.health.nextAt=began+300000;data.health.cooldownUntil=0;
  data.health.currentCoverageRound={startedAt:began,plannedRequests:plan.regions.length,attempts:0,coveredStores:0,totalStores:stores.length,status:'running'};
