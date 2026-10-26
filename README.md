@@ -14,33 +14,30 @@ Fallback: https://apple-pickup-live.o1xhack.workers.dev
 
 ## Architecture
 
-A separate Node collector on a Mac runs one collection round every 300 seconds, with requests spread across the round.
-It requests Apple directly from the Mac for fixed-catalog regional pickup results.
-Cloudflare receives published results and serves the public read APIs; it does not scan Apple.
-The collector learns actual store coverage, prioritizes old/missing stores,
-uses a fixed tour of successfully observed regional coverage to target all 269 stores
-inside 300 seconds, with at most 36 serial requests and 20 seconds of timing reserve.
-It persists actual per-round coverage and missing stores in its own SQLite state.
-A complete nationwide sweep is **not** guaranteed during adaptive throttling, request failure or cooldown.
+A Mac coordinator runs a bounded collection round every 300 seconds. Two fixed,
+non-overlapping assignments sample Apple: `mac-local` covers 122 stores and
+`cloudflare` covers 147. Failed regions do not move to the other executor.
+Actual coverage depends on successful responses; nationwide freshness is not guaranteed.
+Local SQLite preserves observations, counters, state changes and sampling gaps.
 
-After each persisted regional response it immediately publishes a compressed cumulative checkpoint plus state changes
-to Cloudflare D1. The public website only reads this database. Browser feed refresh
-is every 15 seconds while visible; it does not poll Apple. The Mac must be awake,
-online, and logged in for its LaunchAgent to collect. The site still serves saved
-observations when the collector is unavailable, with explicit stale status.
+Public browsing does **not** query D1. The collector publishes a live snapshot to
+KV at most every five minutes. An independent exporter publishes today's compressed
+history to a second KV key; closed dates and earlier California Duo observations
+are versioned static files. ZIP/product/date searches run inside the browser.
+Search, History and Statistics remain usable when the D1 daily quota is exhausted.
+An unavailable collector leaves saved data visible with its actual timestamps.
 
-There is a 52,000/day collector request cap. A single 541 rests its region and collection continues elsewhere. If every
-planned region fails without an intervening success, global backoff applies.
-HTTP 403/429 or an explicit Retry-After also pause globally. Global backoff uses
-5/10/20/30 minutes and halves the request budget (minimum four/round). It increases by one only after a 30-minute
-recovery period without another block. There is no rotating proxy,
-challenge bypass, guarantee against Apple blocking, or automatic paid-plan upgrade.
+Normal live + history publication is approximately 576 KV writes/day, independent
+of visitor searches. Closed-date static uploads happen at most daily, with at most
+two automatic attempts/day. Workers/KV request limits still apply; this is not
+unlimited real-time traffic. D1 is retained only for authenticated Cloudflare
+execution leases and bounded cleanup, not visitor SQL or historical ingestion.
+See [public history architecture and operations](docs/public-history-architecture.md).
 
-Cloudflare free-tier limits still apply: Workers request/CPU limits, D1 storage and
-row budgets can stop service as traffic grows. Collection alone can use roughly
-10,368 publication invocations/day at its maximum 36-request round budget,
-plus heartbeats, publication retries and public API traffic under the free 100,000/day quota. Static assets
-are separate. Monitor actual usage before advertising large-scale service.
+Apple throttling still applies. A single 541 rests its region and collection
+continues elsewhere. Exhausting the round without a success triggers global
+backoff; explicit 403/429/Retry-After can also pause collection. There is no
+rotating proxy, challenge bypass or automatic paid-plan upgrade.
 
 ## Local setup / deployment
 
@@ -53,6 +50,8 @@ npm run build
 npx wrangler d1 create apple-pickup-live
 # Replace database_id in wrangler.jsonc with the returned ID.
 npx wrangler d1 migrations apply apple-pickup-live --remote
+npx wrangler kv namespace create LIVE_CACHE
+# Set LIVE_CACHE namespace ID in wrangler.jsonc.
 npx wrangler secret put INGEST_TOKEN
 npm run deploy
 ```
@@ -65,6 +64,10 @@ chmod 600 .env.local
 npm run collect       # foreground collector; --once for one bounded round
 # On this StudioSSD Mac only, install independent login/background service:
 node scripts/install-collector.mjs
+node scripts/publish-public-history.mjs --prepare
+npm run deploy:pages
+node scripts/publish-public-history.mjs --adopt-deployed
+node scripts/install-history-publisher.mjs
 ```
 
 The installer verifies the expected SSD UUID; adapt that guard deliberately for
@@ -75,7 +78,8 @@ launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.o1xhack.apple-pickup-l
 ```
 
 State/logs are under ignored `state.local/`. Duplicate collectors are rejected.
-Restart preserves SQLite counters, learned coverage, cooldown and unsent events.
+Restart preserves SQLite counters, learned coverage, cooldown and unpublished history.
+The history publisher requires the released Pages shell captured after a successful deployment.
 There are no Apple credentials or checkout/cart actions.
 
 ## Data and definitions

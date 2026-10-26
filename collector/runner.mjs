@@ -8,7 +8,7 @@ import {CollectionStorage} from './storage.mjs';
 import {requestJSON,publishWithRetry,validateRegionalResponse} from './transport.mjs';
 import {chooseRegion} from '../shared/planner.js';
 import {compactVerifiedCoverage,learningProposal,migrateLearningAttempts} from '../shared/coverage-plan.js';
-import {readFileSync,mkdirSync,writeFileSync,openSync,closeSync,unlinkSync} from 'node:fs';
+import {readFileSync,existsSync,mkdirSync,writeFileSync,openSync,closeSync,unlinkSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve,dirname} from 'node:path';
 import {gzipSync,gunzipSync} from 'node:zlib';
@@ -39,11 +39,10 @@ async function publish(){
  if(now>=(data.health.nextLivePublishAt||0)){
   const live=await api('/api/live/publish',{snapshot:data});data.health.nextLivePublishAt=live.nextAt;persist();
  }
- if(data.health.historySyncResumeAt>now){const cloud=data.health.shards?.sources?.cloudflare;if(cloud){cloud.cooldownUntil=Math.max(cloud.cooldownUntil||0,data.health.historySyncResumeAt);cloud.servicePauseReason='d1-quota';cloud.servicePauseUntil=data.health.historySyncResumeAt}persist();return;}
- const events=storage.pending(),checkpoints=storage.pendingCheckpoints();
- const result=await publishWithRetry(()=>api('/api/ingest',{snapshot:data,events:events.map(e=>JSON.parse(e.payload)),checkpoints:checkpoints.map(c=>c.snapshot)}));
- if(result.historyPersisted===false){data.health.historySyncResumeAt=result.retryAt;data.health.historySyncStatus='queued';const cloud=data.health.shards?.sources?.cloudflare;if(cloud){cloud.cooldownUntil=Math.max(cloud.cooldownUntil||0,result.retryAt);cloud.servicePauseReason='d1-quota';cloud.servicePauseUntil=result.retryAt}persist();return}
- data.health.historySyncStatus='synced';data.health.historySyncResumeAt=0;storage.acknowledge(events,data,checkpoints);
+ const receiptPath=resolve(stateDir,'public-history/receipt.json');
+ if(existsSync(receiptPath)){const receipt=JSON.parse(readFileSync(receiptPath,'utf8'));if(receipt.uptoCheckpoint>(data.health.historyArchiveThrough||0)){storage.acknowledgePublishedHistory(receipt.uptoCheckpoint);data.health.historyArchiveThrough=receipt.uptoCheckpoint}data.health.historyArchivePublishedAt=receipt.publishedAt}
+ data.health.historySyncStatus='published-files';delete data.health.historySyncResumeAt;persist();
+
 }
 let budgetDay=new Date().setUTCHours(0,0,0,0),budgetUsed=db.prepare('SELECT count(*) n FROM requests WHERE at>=?').get(budgetDay).n;
 async function tick(){

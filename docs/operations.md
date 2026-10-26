@@ -102,3 +102,14 @@ Production verification: complete archive remained 158,112 checks / 96 aggregate
 rows, and subsequent Oakridge filtering returned 13,176 checks / 8 rows with
 `x-archive-cache: memory`. Cached range was confirmed in D1. This proves reuse for
 that tested range; it does not establish a new daily quota consumption rate.
+
+
+### Current: public queries use files, not D1 (2026-10-26)
+
+The preceding D1 range-cache optimizations were transitional and did not prevent
+account-wide exhaustion. Public SQL history/checkpoint/series/legacy APIs and
+historical ingestion are now retired (410). Public browsing, historical ZIP/
+product filters and date statistics use compressed KV/static files and browser
+calculation. D1 remains only for the bounded Cloudflare execution lease/cleanup.
+See [the current architecture, publisher and recovery steps](public-history-architecture.md).
+Do not restore the earlier SQL client to work around a publication problem.

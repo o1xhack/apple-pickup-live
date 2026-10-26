@@ -10,3 +10,5 @@ state.local/
 .DS_Store
 
 /pages-dist/
+
+__pycache__/
