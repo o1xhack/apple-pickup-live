@@ -1,3 +1,5 @@
+import {collectShardedRound} from './sharded.mjs';
+import {validateShards} from '../shared/shards.js';
 import {verifiedCyclePlan,activateFiveMinuteTarget,nationalSchedule,nextVerifiedRegion,coverageRound} from '../shared/national-cycle.js';
 import {initializeDailyCounters} from '../shared/daily.js';
 import {queueValidation,validateRound,nextCollectionDelay} from '../shared/deployment-validation.js';
@@ -19,6 +21,7 @@ const config=Object.fromEntries(readFileSync(resolve(root,'.env.local'),'utf8').
 const stores=JSON.parse(readFileSync(resolve(root,'data/us-stores.json'))),products=JSON.parse(readFileSync(resolve(root,'data/products.json')));
 const hubs=JSON.parse(readFileSync(resolve(root,'data/polling-hubs.json'))).hubs;
 const proposals=JSON.parse(readFileSync(resolve(root,'data/learning-hubs.json'))).hubs;
+const shardPlan=validateShards(JSON.parse(readFileSync(resolve(root,'data/collection-shards.json'))),stores);
 const INTERVAL_SECONDS=Number(config.COLLECTION_INTERVAL_SECONDS)||300;
 const stateDir=resolve(root,'state.local');mkdirSync(stateDir,{recursive:true});
 // A single launchd process owns this database. O_EXCL prevents accidental duplicate collectors.
@@ -34,6 +37,7 @@ const persist=()=>storage.save(data,coverage);
 async function publish(){data.publishedAt=Date.now();persist();const events=storage.pending();await publishWithRetry(()=>api('/api/ingest',{snapshot:data,events:events.map(e=>JSON.parse(e.payload))}));storage.acknowledge(events,data)}
 let budgetDay=new Date().setUTCHours(0,0,0,0),budgetUsed=db.prepare('SELECT count(*) n FROM requests WHERE at>=?').get(budgetDay).n;
 async function tick(){
+ if(config.COLLECTION_MODE==='fixed-split'){try{return await collectShardedRound({data,coverage,plan:shardPlan,stores,products,storage,collectMac:zip=>collectLocal(zip,products,stores),collectCloudflare:task=>api('/api/collector/check',task),publish,isStopping:()=>stopping})}catch(error){const committed=storage.load();data=committed.snapshot;for(const key of Object.keys(coverage))delete coverage[key];Object.assign(coverage,committed.coverage);throw error}}
  const began=Date.now();queueValidation(data.health,'national-five-minute-v1',began);let validationErrors=0,firstResult=null;normalizeBudgetPeriod(data.health,INTERVAL_SECONDS);requestBudget(data.health,began);const cyclePlan=verifiedCyclePlan(coverage,stores,data);activateFiveMinuteTarget(data.health,cyclePlan,began);const schedule=nationalSchedule(data.health,cyclePlan,INTERVAL_SECONDS);const maxRequests=schedule.budget;data.health.intervalSeconds=INTERVAL_SECONDS;data.health.spacingSeconds=Math.round(schedule.spacingMs/100)/10;data.health.nextAt=began+schedule.intervalMs;let attempts=0;const checked=new Set();let tried=new Set();let passSeen=new Set(data.health.coveragePassSeen||[]);
  if(data.health.cooldownUntil>began){data.health.nextAt=Math.min(began+schedule.intervalMs,data.health.cooldownUntil);data.health.message='Collection is cooling down after request errors';await publish();return}
  data.health.currentCoverageRound={startedAt:began,deadlineAt:began+schedule.intervalMs,plannedRequests:cyclePlan.regions.length,coveredStores:0,totalStores:stores.length,attempts:0,status:'running'};

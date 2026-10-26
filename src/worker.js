@@ -1,5 +1,7 @@
 import stores from '../data/us-stores.json';
 import products from '../data/products.json';
+import shards from '../data/collection-shards.json';
+import {executeCloudflare} from './shard-executor.js';
 
 import {stockHistory} from './history.js';
 import {legacyMetadata,legacyStatistics} from './legacy.js';
@@ -54,12 +56,13 @@ export default {
     await saveCheckpoint(env,data,input.events||[]);response=json({ok:true,ts:data.publishedAt});
    }else if(url.pathname==='/api/collector/check'&&request.method==='POST'){
     if(!env.INGEST_TOKEN||!safeEqual(request.headers.get('authorization'),`Bearer ${env.INGEST_TOKEN}`))return json({error:'Unauthorized'},401);
-    response=json({error:'Apple scanning runs on the local Mac collector'},410);
+    const result=await executeCloudflare(request,env,shards,products,stores);response=json(result.body,result.httpStatus);
    }else response=json({error:'Not found'},404);
    return apiHeaders(response);
   }catch(error){return apiHeaders(json({error:String(error.message||'Request failed')},500))}
  },
  async scheduled(event,env,ctx){
+  ctx.waitUntil(env.DB.prepare('DELETE FROM collector_executions WHERE at<?').bind(Date.now()-86400000).run());
   const d=new Date(event.scheduledTime);if(d.getUTCHours()===8&&d.getUTCMinutes()===0)ctx.waitUntil(env.DB.prepare("DELETE FROM checkpoints WHERE ts<? AND strftime('%M',ts/1000,'unixepoch')!='00'").bind(Date.now()-14*86400000).run());
  }
 };
