@@ -4,7 +4,7 @@ import shards from '../data/collection-shards.json';
 import {executeCloudflare} from './shard-executor.js';
 
 import {stockHistory} from './history.js';
-import {legacyMetadata,legacyStatistics} from './legacy.js';
+import {legacyMetadata,legacyStatistics,ARCHIVE_CACHE_STATUS} from './legacy.js';
 const historyProducts=products;
 
 
@@ -36,7 +36,7 @@ export default {
    if(!url.pathname.startsWith('/api/'))return env.ASSETS.fetch(request);
    let response;
    if(url.pathname==='/api/info')response=json({startedAt:await siteStart(env),stores:stores.length,products,version:'0.1.0',legacy:await legacyMetadata(env),freshSeconds:900,source:'Apple pickup observations',coordinateAccuracy:'ZIP estimates, approximate straight-line distance'});
-   else if(url.pathname==='/api/legacy/statistics'){try{response=json(await legacyStatistics(env,url,stores,historyProducts))}catch(error){response=json({error:error.message},400)}}
+   else if(url.pathname==='/api/legacy/statistics'){try{const result=await legacyStatistics(env,url,stores,historyProducts);response=json(result,200,{'x-archive-cache':result[ARCHIVE_CACHE_STATUS]||'none'})}catch(error){response=json({error:error.message},400)}}
    else if(url.pathname==='/api/latest'||url.pathname==='/api/checkpoint'){
     const at=Number(url.searchParams.get('at')||Date.now());if(!Number.isFinite(at))return json({error:'Invalid time'},400);
     const row=await latest(env,Math.min(at,Date.now()));
@@ -62,6 +62,7 @@ export default {
   }catch(error){return apiHeaders(json({error:String(error.message||'Request failed')},500))}
  },
  async scheduled(event,env,ctx){
+  ctx.waitUntil(env.DB.prepare('DELETE FROM archive_query_cache WHERE expires_at<?').bind(Date.now()).run());
   ctx.waitUntil(env.DB.prepare('DELETE FROM collector_executions WHERE at<?').bind(Date.now()-86400000).run());
   const d=new Date(event.scheduledTime);if(d.getUTCHours()===8&&d.getUTCMinutes()===0)ctx.waitUntil(env.DB.prepare("DELETE FROM checkpoints WHERE ts<? AND strftime('%M',ts/1000,'unixepoch')!='00'").bind(Date.now()-14*86400000).run());
  }

@@ -73,3 +73,32 @@ No collection cadence, shard assignment, paid plan or private App is changed.
 Already-consumed daily reads are not refunded by this optimization. Watch actual
 D1 read totals, not only Worker request totals, before concluding free-tier
 capacity is sufficient at larger visitor volumes.
+
+### Persistent range reuse and browser-only statistics filters
+
+Follow-up inspection for the hour ending around 23:28 PDT still showed 23
+archive aggregate executions / approximately 491k rows read. A five-minute
+per-edge cache did not adequately prevent repeat full-range work. Do not report
+estimated percentage savings as achieved savings.
+
+Migration `0005_archive_query_cache.sql` adds a persistent result cache keyed by
+archive revision, exact bounded dates and result shape. Successful immutable
+results expire after seven days; edge cache is one day. This avoids a fresh
+archive scan after an isolate restart or edge miss. A cache hit performs a primary
+key lookup (plus metadata lookup when needed), rather than scanning ~21k rows.
+`x-archive-cache` distinguishes computed / edge / memory / persistent responses.
+
+The website requests `series=0`: its archive response includes all store/SKU
+aggregates for the selected dates but no unused archive series. Store, capacity,
+color and ZIP changes filter those aggregates in the browser. Other callers can
+retain filtered series behavior. Only entering statistics or applying dates reads
+saved ranges; merely changing statistics geographic/product filters no longer
+calls the API. The live page still polls `/api/latest` every 15 seconds, reading
+one saved checkpoint; it does not query Apple. History selections still read
+bounded historical events. Browser GETs now honor cache headers instead of
+forcing revalidation. Existing open tabs must reload to receive the new client.
+
+Production verification: complete archive remained 158,112 checks / 96 aggregate
+rows, and subsequent Oakridge filtering returned 13,176 checks / 8 rows with
+`x-archive-cache: memory`. Cached range was confirmed in D1. This proves reuse for
+that tested range; it does not establish a new daily quota consumption rate.
