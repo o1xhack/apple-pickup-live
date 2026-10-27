@@ -13,6 +13,7 @@ export class PublicHistory{
   const m=await this.ensure(),date=utcDay(at),available=[...new Set([...Object.keys(m.archives||{}),...m.currentDays.map(d=>d.day)])].filter(d=>d<=date).sort();const selected=available.at(-1);
   if(!selected)return emptySnapshot(this.stores,this.products,this.info.startedAt);const day=m.currentDays.find(d=>d.day===selected)||await this.file(m.archives[selected]);return reconstructCheckpoint(day,at,this.stores,this.products,this.info.startedAt);
  }
+ async dailyInputs(from,to){const m=await this.ensure();const [days,legacy]=await Promise.all([this.days(from,to),this.file(m.legacy.path)]);return {days,legacy}}
  async series(from,to){return activitySeries(await this.days(from,to),from,to)}
  async legacy(from,to){const m=await this.ensure();return legacyRange(await this.file(m.legacy.path),from,to)}
  async history(filters){const m=await this.ensure();const [days,legacy]=await Promise.all([this.days(filters.from,filters.to),this.file(m.legacy.path)]);return {events:historyEvents([...legacy.events,...days.flatMap(d=>d.events||[])],filters)}}

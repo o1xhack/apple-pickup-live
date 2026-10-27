@@ -95,10 +95,10 @@ and are approximate straight-line miles, not driving distances. See
 - **Unknown / unscanned / pickup not open / stale:** kept distinct from confirmed out of stock.
 - Public recent-stock labels use fifteen minutes; the collector still targets five-minute nationwide coverage. Failures do not overwrite the last success.
 - History lists availability changes and can filter in-stock results before pagination; Statistics includes unchanged repeated checks.
-- The homepage has eight scoped metrics. Stock and header recent-check coverage use fifteen minutes. Stores checked today, in-stock observations today and configuration checks today reset at 00:00 America/Los_Angeles. Cumulative counts start at the public site launch. Every repeated in-stock store × SKU result increments the hit count. Million-scale cards use M/K notation (1,234,567 → 1M 234K) with the exact value retained in their tooltip/accessibility label.
-- The public product scope is iPhone Duo only. Earlier CA Duo history is combined automatically in History/Statistics, without source/model controls; it is excluded from homepage since-launch counters.
+- The homepage has eight scoped metrics. Stock and header recent-check coverage use fifteen minutes. Stores checked today, in-stock observations today and configuration checks today reset at 00:00 America/Los_Angeles. Public counts and default date ranges start at 00:00 America/Los_Angeles on October 24, 2026. Every repeated in-stock store × SKU result increments the hit count. Million-scale cards use M/K notation (1,234,567 → 1M 234K) with the exact value retained in their tooltip/accessibility label.
+- The public product scope is iPhone Duo only. Earlier CA Duo history is combined automatically in History/Statistics, without source/model controls; only observations from October 24 onward contribute to public counters.
 - Raw HTTP/collector errors remain in operational logs, not public banners. Per-store age/stale labels remain visible.
-- Date comparisons use saved cumulative checkpoints, not exact sub-minute boundaries.
+- Date comparisons use saved cumulative checkpoints, not exact sub-minute boundaries. The daily chart counts repeated in-stock observations per Pacific date and follows all store/product filters; it does not count distinct phones.
 - Remote/local checkpoints retain minute detail for 14 days, then hourly checkpoints.
   Changes are retained; local diagnostic requests retain 30 days.
 
