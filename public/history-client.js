@@ -16,5 +16,5 @@ export class PublicHistory{
  async dailyInputs(from,to){const m=await this.ensure();const [days,legacy]=await Promise.all([this.days(from,to),this.file(m.legacy.path)]);return {days,legacy}}
  async series(from,to){return activitySeries(await this.days(from,to),from,to)}
  async legacy(from,to){const m=await this.ensure();return legacyRange(await this.file(m.legacy.path),from,to)}
- async history(filters){const m=await this.ensure();const [days,legacy]=await Promise.all([this.days(filters.from,filters.to),this.file(m.legacy.path)]);return {events:historyEvents([...legacy.events,...days.flatMap(d=>d.events||[])],filters)}}
+ async history(filters){const m=await this.ensure();const [days,legacy]=await Promise.all([this.days(filters.from,filters.to),this.file(m.legacy.path)]);return {publishedAt:m.publishedAt,through:m.coverage?.latestCheckpointAt??m.publishedAt,events:historyEvents([...legacy.events,...days.flatMap(d=>d.events||[])],filters)}}
 }

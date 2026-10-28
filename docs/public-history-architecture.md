@@ -53,6 +53,22 @@ outbox entries sent without deleting source observations. Automatic closed-day
 uploads use `state.local/released-site`, captured after a successful explicit
 frontend deployment, and persist a maximum of two attempts per UTC day.
 
+Both service installers resolve Homebrew Node to its stable `bin/node` (or
+versioned-formula `opt/node@…/bin/node`) symlink, never a removable Cellar keg.
+The 2026-10-28 incident left live sampling intact but stopped history publication
+at Oct 27 10:54 PT: launchd reported `EX_CONFIG` after the pinned Node executable
+was removed by an upgrade. Reinstalling the history service recovered the saved
+backlog; all 30 in-stock changes from Pacific midnight through the recovered
+checkpoint matched the local event IDs. No observations were invented or deleted.
+
+If live totals advance while History stops, compare the publication receipt to
+`/api/public-history`, then inspect `launchctl print` for the history service and
+its executable. Empty stderr does not prove health when launchd cannot spawn the
+process. The History page shows the latest synchronized checkpoint and explicitly
+notes when it is over 15 minutes old. The publisher resumes incrementally from its
+cursor after repair; normal 300-second cadence and existing publication budgets
+still apply.
+
 On upload failure, retain SQLite, the previous KV publication and all versioned
 assets. Retry the publisher after fixing the cause; do not delete counters or
 invent missing observations. D1 history/ingest endpoints intentionally return 410.

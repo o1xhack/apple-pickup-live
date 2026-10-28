@@ -50,7 +50,7 @@ export class HistoryExport{
  bundle(prepared,days,deployed={},now=Date.now()){
   const archives={},currentDays=[];for(const [date,data] of Object.entries(days)){if(prepared.archives[date]&&deployed.archives?.[date]===prepared.archives[date])archives[date]=deployed.archives[date];else currentDays.push(data||this.day(date))}
   if(deployed.legacy?.path!==prepared.legacy.path)throw Error('Legacy archive has not been deployed');
-  const data={schemaVersion:1,publishedAt:now,startedAt:this.startedAt,archives,legacy:prepared.legacy,currentDays,coverage:{source:'saved-local-observations',missingIntervalsAreUnknown:true}};
+  const data={schemaVersion:1,publishedAt:now,startedAt:this.startedAt,archives,legacy:prepared.legacy,currentDays,coverage:{source:'saved-local-observations',missingIntervalsAreUnknown:true,latestCheckpointAt:prepared.cursor}};
   const bytes=gzipSync(JSON.stringify(data));if(bytes.length>20*1024*1024)throw Error('Current history bundle exceeds bounded publication size');return {bytes,data};
  }
  atomic(path,bytes){writeFileSync(path+'.next',bytes);renameSync(path+'.next',path)}
