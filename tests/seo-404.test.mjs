@@ -16,8 +16,9 @@ test('the root 404 page is a real not-found document', async () => {
 });
 
 test('Pages redirects keep the API proxy and reject a homepage soft 404', () => {
-  const redirects = mergeRedirects('/iphone-duo/ /iphone-duo 301\n');
+  const redirects = mergeRedirects('/store/:slug/ /store/:slug 301\n/iphone-duo/ /iphone-duo 301\n');
   assert.match(redirects, /\/api\/latest https:\/\/apple-pickup-live\.o1xhack\.workers\.dev\/api\/latest 302/);
   assert.match(redirects, /\/iphone-duo\/ \/iphone-duo 301/);
+  assert.ok(redirects.indexOf('/api/latest') < redirects.indexOf('/store/:slug/'));
   assert.throws(() => mergeRedirects('/* /index.html 200\n'), /real HTTP 404s/);
 });
