@@ -7,7 +7,7 @@ export function escapeHtml(value) {
 const MARK = '<span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 8h12l1 12H5L6 8Z" stroke="currentColor" stroke-width="1.7"/><path d="M9 8V6a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.7"/></svg></span>';
 
 export function footerHtml() {
-  return `<footer><div><strong>Apple Pickup Live</strong><span>Independent inventory observations. Not affiliated with Apple.</span></div><p>Availability can change before checkout. Failed or old checks are never treated as confirmed out of stock.</p><a href="https://github.com/o1xhack/apple-pickup-live" target="_blank" rel="noopener">GitHub ↗</a></footer>`;
+  return `<footer><div><strong>Apple Pickup Live</strong><span>Independent inventory observations. Not affiliated with Apple.</span></div><p>Availability can change before checkout. Failed or old checks are never treated as confirmed out of stock.</p><nav class="footer-links" aria-label="Footer"><a href="/iphone-duo">iPhone Duo tracker</a><a href="/restock-times">Restock times</a><a href="/stores">All stores</a><a href="https://app.o1xhack.com/" target="_blank" rel="noopener">o1xhack apps</a><a href="https://x.com/o1xhack" target="_blank" rel="noopener">X @o1xhack</a><a href="https://github.com/o1xhack/apple-pickup-live" target="_blank" rel="noopener">GitHub ↗</a></nav></footer>`;
 }
 
 export function crumbs(items) {
