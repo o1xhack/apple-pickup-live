@@ -12,7 +12,8 @@
     "test": "node --test tests/*.test.mjs",
     "deploy": "npm run build && wrangler deploy",
     "collect": "node collector/runner.mjs",
-    "deploy:pages": "npm run build && node scripts/build-pages.mjs && cd pages && wrangler pages deploy ../pages-dist --project-name apple-pickup-live --branch main && cd .. && node scripts/capture-site-shell.mjs"
+    "deploy:pages": "npm run build && node scripts/build-pages.mjs && cd pages && wrangler pages deploy ../pages-dist --project-name apple-pickup-live --branch main && cd .. && node scripts/capture-site-shell.mjs",
+    "seo:og": "python3 scripts/render-og-image.py"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
