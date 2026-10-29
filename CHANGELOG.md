@@ -14,9 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JSON-LD: `WebSite` and `WebApplication` on the homepage; `BreadcrumbList` on guide, restock, store index, and store pages; `FAQPage` on `/iphone-duo`; `Dataset` on `/restock-times`.
 - Prerendered pages: `/iphone-duo`, `/restock-times`, `/stores`, and `/store/<slug>` for all 269 stores. The HTML is in the build output, so crawlers can read it without the live-search script.
 - Restock times are computed from published history into `data/restock-summary.json`. Refresh with `npm run seo:restock` (no Apple request). Counts are candidate restocks, not phones or confirmed deliveries.
-- Footer links to the iPhone Duo guide, restock times, the store index, https://app.o1xhack.com/, and https://x.com/o1xhack. The Chinese toggle translates the new homepage labels.
+- Footer links on the new pages and the 404 page to the iPhone Duo guide, restock times, the store index, https://app.o1xhack.com/, and https://x.com/o1xhack. The existing homepage footer and layout are unchanged.
 - README section for the routes, the build, image and summary regeneration, the 404 host rules, and Search Console.
 
 ### Fixed
 
-- Unknown URLs on Cloudflare Pages returned the homepage with HTTP 200 because the site had no top-level `404.html`. A small noindex 404 page is now served with HTTP 404. The Worker asset binding uses `not_found_handling: 404-page`. Pages redirects refuse a 200 rewrite back to `index.html`.
+- Unknown URLs on Cloudflare Pages returned the homepage with HTTP 200 because the site had no top-level `404.html`. A small noindex 404 page is now served with HTTP 404. The Worker asset binding uses `not_found_handling: 404-page`. Pages redirects refuse a 200 rewrite back to `index.html`. Static API redirects are listed before the store-slug placeholder.

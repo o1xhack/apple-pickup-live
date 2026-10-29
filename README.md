@@ -67,7 +67,9 @@ npm run build
 
 Unknown paths return HTTP 404. Pages does that when a top-level `404.html` exists; without it, Pages serves the homepage with status 200. The Worker asset binding uses `not_found_handling: 404-page`. Do not add a `_redirects` rule that rewrites unknown URLs to `index.html` with status 200.
 
-Canonical URLs have no `.html` suffix and no trailing slash. Pages redirects `/page.html` to `/page`. Trailing-slash redirects are in the generated `_redirects` file, and the Worker uses `html_handling: drop-trailing-slash`.
+The existing homepage layout, copy, and controls are unchanged. Its `<head>` gains the title, description, canonical URL, share tags, and JSON-LD. Footer links to https://app.o1xhack.com/ and https://x.com/o1xhack are on the new pages and the 404 page. The homepage header still links to the hub, as it did before.
+
+Canonical URLs have no `.html` suffix and no trailing slash. Pages redirects `/page.html` to `/page`. Trailing-slash redirects are in the generated `_redirects` file, and the Worker uses `html_handling: drop-trailing-slash`. Static redirect rules are written before the `/store/:slug/` placeholder so the existing API redirects keep working.
 
 Deploy the frontend with `npm run deploy:pages` so the released site shell includes the new HTML. Later data-only history publishes reuse that shell. In Google Search Console, submit `https://pickup.o1xhack.com/sitemap.xml` and inspect `/`, `/iphone-duo`, `/restock-times`, `/stores`, and one `/store/<slug>` URL. After the pages are public, refresh the X card cache if an old preview is stuck. No new paid Cloudflare product is required.
 
@@ -163,6 +165,6 @@ D1 保存共享快照。不是每家店都能严格每 300 秒刷新；受预算
 
 Custom domain: Cloudflare Pages serves public assets and reads the existing Worker API using public CORS. Only the `pickup` CNAME is added at DNSPod; existing domain records and nameservers remain unchanged. Run `npm run deploy:pages` after frontend changes, and `npm run deploy` after Worker/API changes.
 
-公开索引页在 `npm run build` 时预渲染：`/iphone-duo`、`/restock-times`、`/stores` 和 `/store/<slug>`。`robots.txt` 与 `sitemap.xml` 同时生成。未知地址返回 404 页面，而不是 200 的首页。分享图为 `public/og.png`，用 `npm run seo:og` 重新生成。补货时间摘要来自已发布历史，用 `npm run seo:restock` 更新，不会向 Apple 发请求。页脚链到 https://app.o1xhack.com/ 和 https://x.com/o1xhack 。前端改动后运行 `npm run deploy:pages`，再在 Google Search Console 提交 sitemap。
+公开索引页在 `npm run build` 时预渲染：`/iphone-duo`、`/restock-times`、`/stores` 和 `/store/<slug>`。`robots.txt` 与 `sitemap.xml` 同时生成。未知地址返回 404 页面，而不是 200 的首页。分享图为 `public/og.png`，用 `npm run seo:og` 重新生成。补货时间摘要来自已发布历史，用 `npm run seo:restock` 更新，不会向 Apple 发请求。新页面和 404 页脚链到 https://app.o1xhack.com/ 和 https://x.com/o1xhack 。现有首页的版式和文案不变，只增加 head 元数据。前端改动后运行 `npm run deploy:pages`，再在 Google Search Console 提交 sitemap。
 
 A single HTTP 541 quarantines its collection region. Two blocked regions do not imply a nationwide failure. The collector tries the remaining planned regions first; all-region failure, 403/429 or explicit Retry-After trigger global backoff. Coverage progress persists across rounds and the greedy planner minimizes repeated coverage. Upload retries apply only to our idempotent ingestion endpoint, never to Apple queries.
