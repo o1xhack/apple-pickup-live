@@ -39,6 +39,38 @@ continues elsewhere. Exhausting the round without a success triggers global
 backoff; explicit 403/429/Retry-After can also pause collection. There is no
 rotating proxy, challenge bypass or automatic paid-plan upgrade.
 
+## Search indexing
+
+`npm run build` prerenders HTML and writes `robots.txt` and `sitemap.xml` into `dist/`. Cloudflare Pages and the Worker both serve that output. `robots.txt` allows all crawlers and points at `https://pickup.o1xhack.com/sitemap.xml`.
+
+Indexable URLs, in addition to the homepage:
+
+- `/iphone-duo` — what the tracker does, how to search, and an FAQ
+- `/restock-times` — when candidate restocks were observed, from published history
+- `/stores` — every tracked Apple Store
+- `/store/<slug>` — one page per store, using the slug already stored in `data/us-stores.json`
+
+These pages are HTML at build time. Store pages then fill the latest saved status in the browser from `/api/latest`. A ZIP search still does not call Apple. Candidate restocks are adjacent out-of-stock → in-stock observations, not phones and not a delivery schedule. Public totals still start at 2026-10-24 00:00 America/Los_Angeles.
+
+The homepage, guide, restock page, store index, store pages, and 404 page share Open Graph and Twitter `summary_large_image` tags. The image is `public/og.png` (1200×630). Regenerate it, after `python3 -m pip install pillow`, with:
+
+```sh
+npm run seo:og
+```
+
+Restock copy is baked from `data/restock-summary.json`. Refresh that file from the already published history (no Apple request) before a frontend deploy when the numbers should move:
+
+```sh
+npm run seo:restock
+npm run build
+```
+
+Unknown paths return HTTP 404. Pages does that when a top-level `404.html` exists; without it, Pages serves the homepage with status 200. The Worker asset binding uses `not_found_handling: 404-page`. Do not add a `_redirects` rule that rewrites unknown URLs to `index.html` with status 200.
+
+Canonical URLs have no `.html` suffix and no trailing slash. Pages redirects `/page.html` to `/page`. Trailing-slash redirects are in the generated `_redirects` file, and the Worker uses `html_handling: drop-trailing-slash`.
+
+Deploy the frontend with `npm run deploy:pages` so the released site shell includes the new HTML. Later data-only history publishes reuse that shell. In Google Search Console, submit `https://pickup.o1xhack.com/sitemap.xml` and inspect `/`, `/iphone-duo`, `/restock-times`, `/stores`, and one `/store/<slug>` URL. After the pages are public, refresh the X card cache if an old preview is stuck. No new paid Cloudflare product is required.
+
 ## Local setup / deployment
 
 Node >=22.13 (tested on 26), npm, a Cloudflare account and Wrangler authentication:
@@ -130,5 +162,7 @@ D1 保存共享快照。不是每家店都能严格每 300 秒刷新；受预算
 关闭后网站仍能看历史，但会标注数据过期。没有开通收费计划，流量增长仍可能触及免费额度。
 
 Custom domain: Cloudflare Pages serves public assets and reads the existing Worker API using public CORS. Only the `pickup` CNAME is added at DNSPod; existing domain records and nameservers remain unchanged. Run `npm run deploy:pages` after frontend changes, and `npm run deploy` after Worker/API changes.
+
+公开索引页在 `npm run build` 时预渲染：`/iphone-duo`、`/restock-times`、`/stores` 和 `/store/<slug>`。`robots.txt` 与 `sitemap.xml` 同时生成。未知地址返回 404 页面，而不是 200 的首页。分享图为 `public/og.png`，用 `npm run seo:og` 重新生成。补货时间摘要来自已发布历史，用 `npm run seo:restock` 更新，不会向 Apple 发请求。页脚链到 https://app.o1xhack.com/ 和 https://x.com/o1xhack 。前端改动后运行 `npm run deploy:pages`，再在 Google Search Console 提交 sitemap。
 
 A single HTTP 541 quarantines its collection region. Two blocked regions do not imply a nationwide failure. The collector tries the remaining planned regions first; all-region failure, 403/429 or explicit Retry-After trigger global backoff. Coverage progress persists across rounds and the greedy planner minimizes repeated coverage. Upload retries apply only to our idempotent ingestion endpoint, never to Apple queries.
