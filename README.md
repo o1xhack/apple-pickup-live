@@ -50,7 +50,7 @@ Indexable URLs, in addition to the homepage:
 - `/stores` — every tracked Apple Store
 - `/store/<slug>` — one page per store, using the slug already stored in `data/us-stores.json`
 
-These pages are HTML at build time. Store pages then fill the latest saved status in the browser from `/api/latest`. A ZIP search still does not call Apple. Candidate restocks are adjacent out-of-stock → in-stock observations, not phones and not a delivery schedule. Public totals still start at 2026-10-24 00:00 America/Los_Angeles.
+These pages are HTML at build time. Store pages then fill the latest saved status in the browser from `/api/latest`. While a store tab stays open, those labels are checked again every 60 seconds and when the tab becomes visible, and the published snapshot is fetched again on that same cadence. An in-stock observation older than 15 minutes becomes “Not recently verified,” the same freshness rule as the homepage. A ZIP search still does not call Apple. Candidate restocks are adjacent out-of-stock → in-stock observations, not phones and not a delivery schedule. Public totals still start at 2026-10-24 00:00 America/Los_Angeles.
 
 The homepage, guide, restock page, store index, store pages, and 404 page share Open Graph and Twitter `summary_large_image` tags. The image is `public/og.png` (1200×630). Regenerate it, after `python3 -m pip install pillow`, with:
 
