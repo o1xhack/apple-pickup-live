@@ -9,6 +9,7 @@ test('the homepage head has a canonical URL and share cards', async () => {
   assert.match(head, new RegExp(`<title>${HOME_TITLE}</title>`));
   assert.match(head, new RegExp(`<meta name="description" content="${HOME_DESCRIPTION}">`));
   assert.match(head, /<link rel="canonical" href="https:\/\/pickup\.o1xhack\.com\/">/);
+  assert.match(head, /<meta name="msvalidate\.01" content="D1410B8CA09221F9AC7ECFE1C500A4FA">/);
   for (const property of ['og:title', 'og:description', 'og:url', 'og:image', 'og:image:width', 'og:image:height', 'og:image:alt']) {
     assert.match(head, new RegExp(`property="${property}"`));
   }
