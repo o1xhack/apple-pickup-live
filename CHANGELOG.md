@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- IndexNow. `npm run build` writes `/286d51f27fb2687514afa4fc89fbe80a.txt` with that key as the entire body. `npm run deploy:pages` then runs `npm run indexnow`, which waits until the key file is live at `https://pickup.o1xhack.com`, reads the live sitemap, and POSTs the URLs to `https://api.indexnow.org/indexnow` with `host`, `key`, and `keyLocation`, in batches of at most 10,000. The key is public. If the live check or IndexNow is unavailable, the script warns and exits successfully so the Pages deploy stays up. `npm run indexnow` submits again without deploying.
 - `npm run build` writes `robots.txt` (allow all, sitemap pointer) and `sitemap.xml` covering every indexable URL.
 - Homepage title, description, canonical URL, Open Graph tags, and a Twitter `summary_large_image` card. The share image is `public/og.png` (1200×630). Regenerate it with `npm run seo:og`.
 - JSON-LD: `WebSite` and `WebApplication` on the homepage; `BreadcrumbList` on guide, restock, store index, and store pages; `FAQPage` on `/iphone-duo`; `Dataset` on `/restock-times`.
