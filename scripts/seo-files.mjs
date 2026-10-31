@@ -3,6 +3,17 @@ import {join, relative, sep} from 'node:path';
 
 export const SITE_ORIGIN = 'https://pickup.o1xhack.com';
 
+// Public IndexNow ownership file. The body is the key alone, with no newline.
+export const INDEXNOW_KEY = '286d51f27fb2687514afa4fc89fbe80a';
+
+export function indexNowKeyFilename() {
+  return `${INDEXNOW_KEY}.txt`;
+}
+
+export async function writeIndexNowKey(distDir) {
+  await writeFile(join(distDir, indexNowKeyFilename()), INDEXNOW_KEY);
+}
+
 export async function listHtmlFiles(dir, base = dir) {
   const files = [];
   for (const entry of await readdir(dir, {withFileTypes: true})) {
@@ -51,5 +62,6 @@ export async function writeSeoFiles(distDir) {
   const locations = await indexableLocations(distDir);
   await writeFile(join(distDir, 'robots.txt'), renderRobotsTxt());
   await writeFile(join(distDir, 'sitemap.xml'), renderSitemap(locations));
+  await writeIndexNowKey(distDir);
   return locations;
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, writeFile, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {locationForHtml, renderRobotsTxt, renderSitemap, writeSeoFiles, SITE_ORIGIN} from '../scripts/seo-files.mjs';
+import {INDEXNOW_KEY, indexNowKeyFilename, locationForHtml, renderRobotsTxt, renderSitemap, writeSeoFiles, SITE_ORIGIN} from '../scripts/seo-files.mjs';
 
 test('robots.txt allows crawlers and points at the sitemap', () => {
   const robots = renderRobotsTxt();
@@ -40,6 +40,12 @@ test('writeSeoFiles indexes html pages and omits noindex 404s', async () => {
     assert.match(await readFile(join(dir, 'robots.txt'), 'utf8'), /Allow: \//);
     assert.match(await readFile(join(dir, 'sitemap.xml'), 'utf8'), /iphone-duo/);
     assert.doesNotMatch(await readFile(join(dir, 'sitemap.xml'), 'utf8'), /404/);
+    assert.equal(indexNowKeyFilename(), `${INDEXNOW_KEY}.txt`);
+    assert.equal(INDEXNOW_KEY, '286d51f27fb2687514afa4fc89fbe80a');
+    assert.match(INDEXNOW_KEY, /^[a-f0-9]{8,128}$/);
+    const keyBytes = await readFile(join(dir, indexNowKeyFilename()));
+    assert.deepEqual(keyBytes, Buffer.from(INDEXNOW_KEY));
+    assert.doesNotMatch(await readFile(join(dir, 'sitemap.xml'), 'utf8'), new RegExp(INDEXNOW_KEY));
   } finally {
     await rm(dir, {recursive: true, force: true});
   }
