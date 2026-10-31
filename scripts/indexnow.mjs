@@ -71,7 +71,11 @@ async function fetchWithTimeout(fetchImpl, url, init, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetchImpl(url, {...init, signal: controller.signal});
+    const response = await fetchImpl(url, {...init, signal: controller.signal});
+    // Headers can arrive while the body is still coming. Keep the abort armed
+    // until text() finishes, or a stall is no longer bounded by timeoutMs.
+    const body = await response.text();
+    return {status: response.status, body};
   } finally {
     clearTimeout(timer);
   }
@@ -88,8 +92,7 @@ export async function waitForExactBody(url, expected, {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       const response = await fetchWithTimeout(fetchImpl, url, {redirect: 'manual', cache: 'no-store'}, timeoutMs);
-      const body = await response.text();
-      if (response.status === 200 && keyFileMatches(body, expected)) return {ok: true, attempts: attempt};
+      if (response.status === 200 && keyFileMatches(response.body, expected)) return {ok: true, attempts: attempt};
       error = `HTTP ${response.status}`;
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
@@ -122,7 +125,7 @@ export async function postIndexNowBatch(urlList, {
         },
         body: payload,
       }, timeoutMs);
-      const detail = (await response.text()).trim().replace(/\s+/g, ' ').slice(0, 200);
+      const detail = response.body.trim().replace(/\s+/g, ' ').slice(0, 200);
       if (SUCCESS_STATUS.has(response.status)) return {ok: true, status: response.status, attempts: attempt};
       error = detail ? `HTTP ${response.status} ${detail}` : `HTTP ${response.status}`;
       if (!RETRYABLE_STATUS.has(response.status)) return {ok: false, status: response.status, attempts: attempt, error};
@@ -160,10 +163,9 @@ export async function notifyIndexNow({
   try {
     const response = await fetchWithTimeout(fetchImpl, sitemapUrl, {redirect: 'manual', cache: 'no-store'}, timeoutMs);
     if (response.status !== 200) {
-      await response.text().catch(() => {});
       return {ok: false, submitted: 0, total: 0, batches: 0, statuses: [], reason: `sitemap ${sitemapUrl} returned HTTP ${response.status}`};
     }
-    xml = await response.text();
+    xml = response.body;
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : String(caught);
     return {ok: false, submitted: 0, total: 0, batches: 0, statuses: [], reason: `sitemap fetch failed: ${message}`};

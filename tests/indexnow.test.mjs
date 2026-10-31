@@ -235,6 +235,95 @@ test('retryable IndexNow responses are tried again and client errors are not', a
   assert.match(fatal.reason, /HTTP 422/);
 });
 
+function bodyAfter(init, body, delayMs) {
+  return {
+    status: 200,
+    text() {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve(body), delayMs);
+        const abort = () => {
+          clearTimeout(timer);
+          reject(new DOMException('The operation was aborted', 'AbortError'));
+        };
+        if (init?.signal?.aborted) {
+          abort();
+          return;
+        }
+        init?.signal?.addEventListener('abort', abort, {once: true});
+      });
+    },
+  };
+}
+
+async function within(work, limitMs) {
+  const started = Date.now();
+  const result = await work;
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < limitMs, `took ${elapsed}ms; limit is ${limitMs}ms`);
+  return result;
+}
+
+test('a response body that arrives after the timeout does not hang or count as success', async () => {
+  const timeoutMs = 80;
+  const bodyDelayMs = 250;
+
+  const stalledKey = await within(notifyIndexNow({
+    fetchImpl: async (url, init) => bodyAfter(init, INDEXNOW_KEY, bodyDelayMs),
+    sleep: async () => {},
+    keyAttempts: 1,
+    timeoutMs,
+  }), 180);
+  assert.equal(stalledKey.ok, false);
+  assert.equal(stalledKey.submitted, 0);
+  assert.match(stalledKey.reason, /aborted/i);
+
+  let posts = 0;
+  const stalledSitemap = await within(notifyIndexNow({
+    fetchImpl: async (url, init) => {
+      if (String(url).endsWith('.txt')) return httpResponse(200, INDEXNOW_KEY);
+      if (init?.method === 'POST') posts += 1;
+      return bodyAfter(init, renderSitemap([`${SITE_ORIGIN}/`]), bodyDelayMs);
+    },
+    sleep: async () => {},
+    keyAttempts: 1,
+    timeoutMs,
+  }), 180);
+  assert.equal(stalledSitemap.ok, false);
+  assert.equal(posts, 0);
+  assert.match(stalledSitemap.reason, /sitemap fetch failed/);
+  assert.match(stalledSitemap.reason, /aborted/i);
+
+  const stalledPost = await within(notifyIndexNow({
+    fetchImpl: async (url, init) => {
+      if (init?.method === 'POST') return bodyAfter(init, '', bodyDelayMs);
+      if (String(url).endsWith('.txt')) return httpResponse(200, INDEXNOW_KEY);
+      return httpResponse(200, renderSitemap([`${SITE_ORIGIN}/`]));
+    },
+    sleep: async () => {},
+    keyAttempts: 1,
+    submitAttempts: 1,
+    timeoutMs,
+  }), 180);
+  assert.equal(stalledPost.ok, false);
+  assert.equal(stalledPost.submitted, 0);
+  assert.match(stalledPost.reason, /aborted/i);
+
+  const accepted = await notifyIndexNow({
+    fetchImpl: async (url, init) => {
+      if (String(url).endsWith('.txt')) return bodyAfter(init, INDEXNOW_KEY, 20);
+      if (init?.method === 'POST') return httpResponse(202, 'accepted');
+      return httpResponse(200, renderSitemap([`${SITE_ORIGIN}/`]));
+    },
+    sleep: async () => {},
+    keyAttempts: 1,
+    submitAttempts: 1,
+    timeoutMs: 200,
+  });
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.submitted, 1);
+  assert.deepEqual(accepted.statuses, [202]);
+});
+
 test('a sitemap failure skips the IndexNow POST', async () => {
   const calls = [];
   const result = await notifyIndexNow({

@@ -21,5 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- IndexNow keeps its request timeout armed until the response body is read. A server that sends headers and then stalls can no longer hold the end of `npm run deploy:pages` open. The step still warns and exits successfully.
 - Store pages re-check saved pickup labels every 60 seconds and when the tab becomes visible, and they fetch `/api/latest` again on those occasions. An in-stock observation older than 15 minutes changes to “Not recently verified” instead of staying in stock.
 - Unknown URLs on Cloudflare Pages returned the homepage with HTTP 200 because the site had no top-level `404.html`. A small noindex 404 page is now served with HTTP 404. The Worker asset binding uses `not_found_handling: 404-page`. Pages redirects refuse a 200 rewrite back to `index.html`. Static API redirects are listed before the store-slug placeholder.
