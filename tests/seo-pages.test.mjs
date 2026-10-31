@@ -48,7 +48,22 @@ test('prerendered pages contain HTML text, schema, and sitemap URLs', async () =
     assert.match(visible(restock), /not an Apple restock schedule and not a count of phones/);
     assert.match(visible(restock), new RegExp(hourRange(6)));
     assert.match(index, /href="\/store\/thesummit"/);
-    assert.equal(index.match(/href="\/store\//g).length, stores.length);
+    const english = html => html.slice(0, html.indexOf('<template id="page-zh"'));
+    const chinese = html => html.slice(html.indexOf('<template id="page-zh"'));
+    assert.equal(english(index).match(/href="\/store\//g).length, stores.length);
+    assert.equal(chinese(index).match(/href="\/store\//g).length, stores.length);
+    for (const html of [guide, restock, index, store]) {
+      assert.match(english(html), /data-language-toggle[^>]*>中文</);
+      assert.match(chinese(html), /data-language-toggle[^>]*>English</);
+      assert.match(html, /<script src="\/page-language\.js"><\/script>/);
+    }
+    assert.match(chinese(guide), /data-title="iPhone Duo 取货库存/);
+    assert.match(chinese(guide), /怎么查附近哪家有 iPhone Duo 现货/);
+    assert.match(chinese(restock), /不是 Apple 的补货计划/);
+    assert.match(chinese(restock), new RegExp(hourRange(6, 'zh')));
+    assert.match(chinese(store), /星白色/);
+    assert.equal(english(guide).includes('怎么查'), false);
+    assert.equal((store.match(/store-status\.js/g) || []).length, 1, 'the store script loads once, outside the template');
     assert.match(visible(store), /211 Summit Boulevard/);
     assert.match(visible(store), /Birmingham/);
     assert.match(store, /"@type":"BreadcrumbList"/);

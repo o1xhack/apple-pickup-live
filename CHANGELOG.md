@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restock times are computed from published history into `data/restock-summary.json`. Refresh with `npm run seo:restock` (no Apple request). Counts are candidate restocks, not phones or confirmed deliveries.
 - Footer links on the new pages and the 404 page to the iPhone Duo guide, restock times, the store index, https://app.o1xhack.com/, and https://x.com/o1xhack. The existing homepage footer and layout are unchanged.
 - README section for the routes, the build, image and summary regeneration, the 404 host rules, and Search Console.
+- Chinese on the new pages and the 404 page. Each page has the same 中文 / English button as the homepage and shares its saved choice. The English HTML stays the indexed version; the Chinese text ships in the same file and is swapped in by `public/page-language.js`. Store-page stock labels are translated too.
 
 ### Fixed
 

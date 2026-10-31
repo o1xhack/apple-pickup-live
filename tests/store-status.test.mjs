@@ -95,3 +95,15 @@ test('visibility and the 60 second timer re-evaluate and refetch', async () => {
   await flush();
   assert.ok(calls.length > beforeHidden);
 });
+
+test('Chinese pages label the saved snapshot in Chinese', () => {
+  const {statusLabel, renderSnapshot} = loadScript();
+  const at = 7_000_000;
+  assert.equal(statusLabel({at, code: '1'}, at, 'zh'), '有货');
+  assert.equal(statusLabel({at, code: '1'}, at + 900001, 'zh'), '近期未验证');
+  const {root, rows, summary} = page([{part: 'MK1E4LL/A'}]);
+  const snapshot = {products: [{part: 'MK1E4LL/A'}], stores: {R225: {cells: [{at, code: '1'}]}}};
+  renderSnapshot(root, snapshot, 'R225', at + 1000, 'zh');
+  assert.equal(rows[0].querySelector('[data-status]').textContent, '有货');
+  assert.match(summary.textContent, /1 种配置中有 1 种有货/);
+});

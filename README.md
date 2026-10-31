@@ -52,6 +52,8 @@ Indexable URLs, in addition to the homepage:
 
 These pages are HTML at build time. Store pages then fill the latest saved status in the browser from `/api/latest`. While a store tab stays open, those labels are checked again every 60 seconds and when the tab becomes visible, and the published snapshot is fetched again on that same cadence. An in-stock observation older than 15 minutes becomes “Not recently verified,” the same freshness rule as the homepage. A ZIP search still does not call Apple. Candidate restocks are adjacent out-of-stock → in-stock observations, not phones and not a delivery schedule. Public totals still start at 2026-10-24 00:00 America/Los_Angeles.
 
+Like the homepage, these pages and the 404 page open in English and have a 中文 / English button. They share the homepage's saved choice (`apl-language` in local storage). The English HTML is what search engines index. Each file also carries the Chinese version in a `<template>`, which `public/page-language.js` swaps in for visitors who chose Chinese.
+
 The homepage, guide, restock page, store index, store pages, and 404 page share Open Graph and Twitter `summary_large_image` tags. The image is `public/og.png` (1200×630). Regenerate it, after `python3 -m pip install pillow`, with:
 
 ```sh
@@ -165,6 +167,6 @@ D1 保存共享快照。不是每家店都能严格每 300 秒刷新；受预算
 
 Custom domain: Cloudflare Pages serves public assets and reads the existing Worker API using public CORS. Only the `pickup` CNAME is added at DNSPod; existing domain records and nameservers remain unchanged. Run `npm run deploy:pages` after frontend changes, and `npm run deploy` after Worker/API changes.
 
-公开索引页在 `npm run build` 时预渲染：`/iphone-duo`、`/restock-times`、`/stores` 和 `/store/<slug>`。`robots.txt` 与 `sitemap.xml` 同时生成。未知地址返回 404 页面，而不是 200 的首页。分享图为 `public/og.png`，用 `npm run seo:og` 重新生成。补货时间摘要来自已发布历史，用 `npm run seo:restock` 更新，不会向 Apple 发请求。新页面和 404 页脚链到 https://app.o1xhack.com/ 和 https://x.com/o1xhack 。现有首页的版式和文案不变，只增加 head 元数据。前端改动后运行 `npm run deploy:pages`，再在 Google Search Console 提交 sitemap。
+公开索引页在 `npm run build` 时预渲染：`/iphone-duo`、`/restock-times`、`/stores` 和 `/store/<slug>`。`robots.txt` 与 `sitemap.xml` 同时生成。未知地址返回 404 页面，而不是 200 的首页。分享图为 `public/og.png`，用 `npm run seo:og` 重新生成。补货时间摘要来自已发布历史，用 `npm run seo:restock` 更新，不会向 Apple 发请求。新页面和 404 页脚链到 https://app.o1xhack.com/ 和 https://x.com/o1xhack 。这些新页面和 404 页面同样默认英文、可切换中文，和首页共用同一个语言选择；搜索引擎索引的是英文 HTML，中文文字放在同一个文件里，由 `public/page-language.js` 切换。现有首页的版式和文案不变，只增加 head 元数据。前端改动后运行 `npm run deploy:pages`，再在 Google Search Console 提交 sitemap。
 
 A single HTTP 541 quarantines its collection region. Two blocked regions do not imply a nationwide failure. The collector tries the remaining planned regions first; all-region failure, 403/429 or explicit Retry-After trigger global backoff. Coverage progress persists across rounds and the greedy planner minimizes repeated coverage. Upload retries apply only to our idempotent ingestion endpoint, never to Apple queries.

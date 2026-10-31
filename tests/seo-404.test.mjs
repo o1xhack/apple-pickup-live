@@ -10,7 +10,8 @@ test('the root 404 page is a real not-found document', async () => {
   assert.match(html, /name="robots" content="noindex"/);
   assert.match(html, /href="\/styles.css"/);
   assert.match(html, /This address is not on Apple Pickup Live/);
-  assert.doesNotMatch(html, /<script/);
+  assert.deepEqual(html.match(/<script[^>]*>/g), ['<script src="/page-language.js">'], 'only the language switch, never the app bundle');
+  assert.match(html, /<template id="page-zh"[^>]*>[\s\S]*找不到这个页面/);
   assert.equal(config.assets.not_found_handling, '404-page');
   assert.notEqual(config.assets.not_found_handling, 'single-page-application');
 });
