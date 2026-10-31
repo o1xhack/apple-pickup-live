@@ -6,6 +6,7 @@ import {filterStores,viewCell as modelViewCell,rangeMetrics} from '../shared/mod
 import {storeStatistics,toggleSort,sortStatistics} from '../shared/statistics.js';
 import {liveMetrics,FRESH_WINDOW_MS} from '../shared/live-metrics.js';
 import {metricNumber} from '../shared/number-format.js';
+import {HOME_TITLE} from '../shared/seo.js';
 const viewCell=(cell,now=Date.now())=>modelViewCell(cell,now,FRESH_WINDOW_MS);
 import {combineMetrics,combineStoreRows,filterArchiveRows} from '../shared/archive.js';
 let statisticsSort=null;
@@ -16,7 +17,7 @@ const tr=(en,cn)=>language==='zh'?cn:en;
 const n=x=>Number(x||0).toLocaleString(language==='zh'?'zh-CN':'en-US');
 const date=ms=>ms?new Date(ms).toLocaleString(language==='zh'?'zh-CN':'en-US',{timeZone:'America/Los_Angeles',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
 function ago(ms){if(!ms)return tr('Not checked yet','尚未检查');const seconds=Math.max(0,Math.floor((Date.now()-ms)/1000));return seconds<60?tr('just now','刚刚'):seconds<3600?tr(`${Math.floor(seconds/60)} min ago`,`${Math.floor(seconds/60)} 分钟前`):tr(`${Math.floor(seconds/3600)}h ago`,`${Math.floor(seconds/3600)} 小时前`)}
-function translate(){document.documentElement.lang=language==='zh'?'zh-CN':'en';document.title=tr('Apple Pickup Live — iPhone Duo across America','Apple Pickup Live — 全美 iPhone Duo 库存');for(const el of document.querySelectorAll('[data-i18n]'))if(language==='zh'&&zh[el.dataset.i18n])el.innerHTML=zh[el.dataset.i18n];$('language').textContent=tr('中文','English');$('zip').placeholder=tr('e.g. 95014','例如 95014');$('city').placeholder=tr('City or store, e.g. Miami','城市或门店，例如 Miami');$('city').setAttribute('aria-label',tr('City or store','城市或门店'));$('capacity').options[0].text=tr('All storage','全部容量');$('color').options[0].text=tr('All colors','全部颜色');for(const option of [...$('color').options].slice(1))option.text=language==='zh'?({'Star White':'星白色','Night Sky':'夜空色'}[option.value]||option.value):option.value}
+function translate(){document.documentElement.lang=language==='zh'?'zh-CN':'en';document.title=tr(HOME_TITLE,'iPhone Duo 库存追踪 — Apple Pickup Live');for(const el of document.querySelectorAll('[data-i18n]'))if(language==='zh'&&zh[el.dataset.i18n])el.innerHTML=zh[el.dataset.i18n];$('language').textContent=tr('中文','English');$('zip').placeholder=tr('e.g. 95014','例如 95014');$('city').placeholder=tr('City or store, e.g. Miami','城市或门店，例如 Miami');$('city').setAttribute('aria-label',tr('City or store','城市或门店'));$('capacity').options[0].text=tr('All storage','全部容量');$('color').options[0].text=tr('All colors','全部颜色');for(const option of [...$('color').options].slice(1))option.text=language==='zh'?({'Star White':'星白色','Night Sky':'夜空色'}[option.value]||option.value):option.value}
 translate();
 let catalog=[],products=[],zips={},topology=null,snapshot=null,info=null,shown=[],partIndices=[],tab='live',limit=30,statsData=null,storeFocus=null,loading=false,archiveClient=null,liveArchive={rows:[],todayRows:[]};
 const api=async(path)=>{const r=await fetch(path.startsWith('/api/')?(globalThis.APP_API_ORIGIN||'')+path:path,{cache:'default'});if(!r.ok){let detail;try{detail=(await r.json()).error}catch{}throw Error(detail||tr('Data is temporarily unavailable','数据暂时不可用'))}return r.json()};
